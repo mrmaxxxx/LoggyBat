@@ -30,7 +30,8 @@ Logitech G HUB (WebSocket `ws://localhost:9010`). LGSTrayBattery не нужен
 
 - `dev0000000N` — временные номера, меняются после перезапуска G HUB.
   Устройства искать по `pid`: мышка 16537, наушники 2746.
-- `GET /devices/list`, `GET /battery/<id>/state` работают.
+- `GET /devices/list`, `GET /battery/<id>/state` работают; ответ приходит с тем же `msgId`.
+  Заряд получен для обоих устройств (мышка 92%, наушники 69%).
 - Выключенное устройство: `result.code = INVALID_ARG`, «Battery data not available».
 - Времени измерения в ответе нет: показываем только время получения ответа.
 - События `SUBSCRIBE /battery/state/changed` не проверены: основной механизм — опрос.
