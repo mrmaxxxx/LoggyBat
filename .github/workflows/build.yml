@@ -65,6 +65,17 @@ jobs:
             throw "Build failed. See MSBuild output above."
           }
 
+      # Windows App SDK 2.3.1 resolved WinUI 2.3.0, whose license forbids redistribution
+      # (https://github.com/microsoft/WindowsAppSDK/issues/6654). Expect 2.3.6 from SDK 2.4.0.
+      - name: Check WinUI version
+        shell: pwsh
+        run: |
+          $msix = @(Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE 'AppPackages') -Recurse -File -Filter *.msix |
+            Where-Object FullName -notmatch '[\\/]Dependencies[\\/]')
+          if ($msix.Count -ne 1) { throw "Expected one app MSIX, found $($msix.Count)." }
+          ./scripts/Test-WinUIVersion.ps1 -Msix $msix[0].FullName `
+            -Project (Join-Path $env:GITHUB_WORKSPACE 'src\LoggyBat\LoggyBat.csproj')
+
       # The same CN=Max certificate every time, from repository secrets
       # (see docs/HANDOFF.md). The private key lives only in RUNNER_TEMP
       # during this step; only the public .cer goes into the artifact.

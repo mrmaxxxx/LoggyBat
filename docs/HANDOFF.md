@@ -302,9 +302,30 @@ G HUB работает:
 
 ### Открыто перед первым публичным релизом
 
-- Проверить лицензии и уведомления библиотек, которые попадают в MSIX (.NET, Windows App SDK,
-  WidBar.SDK и др.), и при необходимости дополнить `THIRD_PARTY_NOTICES.md`.
-  Уведомление MIT шаблона andelby/widbar-widget-template уже добавлено.
+Публичный релиз не выпускается, пока все пункты ниже не закрыты.
+
+- **Лицензия WinUI.** Windows App SDK 2.3.1 (до версии 1.1.10.0 включительно) разрешал
+  `Microsoft.WindowsAppSDK.WinUI` **2.3.0** — это видно в `LoggyBat.deps.json` внутри MSIX 1.1.10.0.
+  У WinUI 2.3.0 лицензия «Engineering Preview», запрещающая распространение.
+  Рекомендация Microsoft — https://github.com/microsoft/WindowsAppSDK/issues/6654
+  (ответ представителя Microsoft от 14.08.2026): затронуты WinUI 2.3.2, 2.3.0, 2.2.1, 2.1.0, 2.0.12;
+  исправлено в Windows App SDK 2.4.0, который разрешает WinUI 2.3.6; перед публикацией перейти на 2.4.0.
+  **Исправление:** `Microsoft.WindowsAppSDK` 2.3.1 → 2.4.0 (WidBar.SDK 2.0.5, .NET и прочие
+  прямые зависимости намеренно не менялись; WidBar.SDK 2.0.5 требует Windows App SDK ≥ 2.3.1).
+  Сборка проверяет это автоматически: шаг «Check WinUI version» (`scripts/Test-WinUIVersion.ps1`)
+  падает, если WinUI по NuGet или в `deps.json` внутри MSIX не 2.3.6 либо из затронутого списка.
+  Статус: изменение подготовлено, новой сборкой и на железе ещё не проверено.
+- **Требования MSIX к Windows App Runtime** меняются вместе с SDK. Фактические требования и состав
+  `Dependencies` комплекта первой установки сборка читает из манифестов пакетов, печатает в журнал
+  и падает, если x64-зависимость не покрыта (`scripts/New-DownloadKits.ps1`).
+- **Уведомления о сторонних компонентах** (`THIRD_PARTY_NOTICES.md`) — не завершены. Добавлен только
+  шаблон andelby/widbar-widget-template (MIT). Нужны: WidBar.SDK (MIT), .NET runtime той версии,
+  что в пакете (`LICENSE.TXT` и `THIRD-PARTY-NOTICES.TXT` целиком), CsWinRT (MIT), WebView2 (BSD-подобная).
+  Не проверены источники: `Microsoft.Windows.SDK.NET.dll` (лицензия Windows SDK) и VCLibs
+  из комплекта первой установки.
+- **Условия использования LoggyBat** — не подготовлены. Основание: лицензия Windows App SDK, раздел 3(b)(ii)
+  («require distributors and external end users to agree to terms that protect it and Microsoft at least
+  as much as this agreement»); тот же пункт в лицензиях Windows ML Runtime и WinUI 2.3.6.
 - Решить, нужна ли собственная лицензия для кода LoggyBat (сейчас не назначена).
 
 ### Не проверено (не описывать как проверенное)

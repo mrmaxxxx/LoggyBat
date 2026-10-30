@@ -49,6 +49,34 @@ $archs = @(Get-ChildItem (Join-Path $first 'Dependencies') -Directory | ForEach-
 if (($archs -join ',') -ne 'x64,x86') { throw "first-install: Dependencies must hold x64 and x86 only, found: $($archs -join ',')." }
 if (@(Get-ChildItem $first -Recurse -File -Include *.appxsym).Count -ne 0) { throw 'first-install: symbols must not be included.' }
 
+# What the MSIX really requires vs. what first-install brings, read from the package manifests
+# (not assumed from version numbers): every x64 requirement must be met by a bundled x64 package.
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+function Read-Manifest([string]$path) {
+    $zip = [IO.Compression.ZipFile]::OpenRead($path)
+    try {
+        $reader = New-Object IO.StreamReader($zip.GetEntry('AppxManifest.xml').Open())
+        try { [xml]$reader.ReadToEnd() } finally { $reader.Dispose() }
+    } finally { $zip.Dispose() }
+}
+$required = @((Read-Manifest $msix.FullName).Package.Dependencies.PackageDependency)
+$bundled = @(Get-ChildItem (Join-Path $first 'Dependencies') -Recurse -File | ForEach-Object {
+    $id = (Read-Manifest $_.FullName).Package.Identity
+    [pscustomobject]@{ Name = $id.Name; Version = [version]$id.Version; Arch = $id.ProcessorArchitecture; File = $_.Name }
+})
+'MSIX requires:'
+$required | ForEach-Object { "  $($_.Name) >= $($_.MinVersion)" }
+'first-install Dependencies bring:'
+$bundled | ForEach-Object { "  $($_.Name) $($_.Version) $($_.Arch)  ($($_.File))" }
+foreach ($dep in $required) {
+    $match = @($bundled | Where-Object { $_.Name -eq $dep.Name -and $_.Arch -eq 'x64' -and $_.Version -ge [version]$dep.MinVersion })
+    if (-not $match) {
+        throw "first-install: no x64 $($dep.Name) >= $($dep.MinVersion) in Dependencies."
+    }
+    # Also as a GitHub annotation: readable without signing in, unlike the log.
+    if ($env:GITHUB_ACTIONS) { "::notice title=Dependency::MSIX requires $($dep.Name) >= $($dep.MinVersion); first-install has x64 $($match[0].Version)" }
+}
+
 # The MSIX in both kits must be the signed package of this build, byte for byte.
 $sourceHash = (Get-FileHash $msix.FullName -Algorithm SHA256).Hash
 foreach ($kit in $update, $first) {
