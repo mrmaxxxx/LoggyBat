@@ -3,7 +3,7 @@ name: Build LoggyBat
 on:
   workflow_dispatch:
   push:
-    branches: [loggybat]
+    branches: [main]
 
 permissions:
   contents: read
