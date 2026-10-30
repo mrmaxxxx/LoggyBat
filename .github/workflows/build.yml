@@ -24,6 +24,10 @@ jobs:
         with:
           msbuild-architecture: x64
 
+      - name: Check G HUB parsing
+        shell: pwsh
+        run: dotnet run --project tests/GHubProtocolCheck -c Release
+
       - name: Build package
         shell: pwsh
         run: |

@@ -1,9 +1,6 @@
 using System;
-using System.Globalization;
-using System.Net.Http;
-using System.Threading;
 using System.Threading.Tasks;
-using System.Xml.Linq;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using WidBar.SDK;
@@ -14,19 +11,14 @@ public sealed class MainPlugin :
     WidgetPluginBase,
     IWidgetFlyoutLifecycle
 {
-    private readonly HttpClient _http = new()
-    {
-        Timeout = TimeSpan.FromSeconds(3)
-    };
+    // A charge older than this is not shown: G HUB stopped confirming it.
+    private static readonly TimeSpan StaleAfter = GHubClient.PollInterval * 4;
 
-    private readonly CancellationTokenSource _shutdown = new();
-    private DispatcherTimer? _timer;
+    private readonly GHubClient _ghub = new();
+    private DispatcherQueue? _ui;
     private TextBlock? _previewText;
     private TextBlock? _flyoutText;
 
-    private BatteryInfo? _mouse;
-    private BatteryInfo? _headset;
-    private bool _updating;
     private bool _flyoutVisible;
     private bool _disposed;
 
@@ -39,19 +31,18 @@ public sealed class MainPlugin :
     public override WidgetFlyoutBackdrop FlyoutBackdrop =>
         WidgetFlyoutBackdrop.Acrylic;
 
-    private sealed record BatteryInfo(
-        decimal Percent,
-        bool Charging,
-        string LastUpdate);
-
     public override async Task InitializeAsync(IWidgetContext context)
     {
         await base.InitializeAsync(context);
         context.PreviewVisibilityChanged += OnPreviewVisibilityChanged;
+        _ghub.Changed += OnGHubChanged;
+        UpdateActive();
+        _ghub.Start();
     }
 
     public override UIElement? CreatePreviewContent()
     {
+        _ui ??= DispatcherQueue.GetForCurrentThread();
         _previewText = new TextBlock
         {
             Text = PreviewText(),
@@ -64,22 +55,13 @@ public sealed class MainPlugin :
         var root = new Grid { Background = null };
         root.Children.Add(_previewText);
 
-        if (_timer is null)
-        {
-            _timer = new DispatcherTimer
-            {
-                Interval = TimeSpan.FromSeconds(10)
-            };
-            _timer.Tick += OnTimerTick;
-        }
-
-        UpdateTimer();
-        _ = RefreshAsync();
+        UpdateActive();
         return root;
     }
 
     public override UIElement? CreateFlyoutContent()
     {
+        _ui ??= DispatcherQueue.GetForCurrentThread();
         _flyoutText = new TextBlock
         {
             Text = FlyoutText(),
@@ -104,93 +86,41 @@ public sealed class MainPlugin :
         return panel;
     }
 
-    private static string Percentage(BatteryInfo? battery)
-    {
-        if (battery is null)
-            return "—";
+    private static bool IsFresh(DeviceReading r) =>
+        r.Percent is not null &&
+        r.Problem is null &&
+        r.ReceivedAt is { } at &&
+        DateTimeOffset.Now - at < StaleAfter;
 
-        string value = Math.Round(battery.Percent)
-            .ToString("0", CultureInfo.InvariantCulture);
+    private static string Percentage(DeviceReading r) =>
+        IsFresh(r)
+            ? r.Percent + "%" + (r.Charging ? " ⚡" : "")
+            : "—";
 
-        return value + "%" + (battery.Charging ? " ⚡" : "");
-    }
+    // Receive time only: G HUB does not report when the battery was measured.
+    // Kept short: the flyout has a fixed height.
+    private static string Status(DeviceReading r) =>
+        IsFresh(r) ? $"Ответ G HUB: {r.ReceivedAt:HH:mm:ss}"
+        : r.Problem is not null ? $"Нет данных: {r.Problem}"
+        : "Нет данных: G HUB давно не отвечал";
 
     private string PreviewText() =>
-        $"🖱 {Percentage(_mouse)}   🎧 {Percentage(_headset)}";
+        $"🖱 {Percentage(_ghub.Mouse)}   🎧 {Percentage(_ghub.Headset)}";
 
     private string FlyoutText() =>
-        $"🖱 G502 X PLUS: {Percentage(_mouse)}\n" +
-        $"Обновление источника: {_mouse?.LastUpdate ?? "нет данных"}\n\n" +
-        $"🎧 PRO X Wireless: {Percentage(_headset)}\n" +
-        $"Обновление источника: {_headset?.LastUpdate ?? "нет данных"}";
+        $"🖱 G502 X PLUS: {Percentage(_ghub.Mouse)}\n" +
+        $"{Status(_ghub.Mouse)}\n\n" +
+        $"🎧 PRO X Wireless: {Percentage(_ghub.Headset)}\n" +
+        $"{Status(_ghub.Headset)}";
 
-    private async Task<BatteryInfo?> ReadBatteryAsync(string deviceId)
-    {
-        try
-        {
-            string xml = await _http.GetStringAsync(
-                $"http://localhost:12321/device/{deviceId}",
-                _shutdown.Token);
-
-            var root = XDocument.Parse(xml).Root;
-            if (root is null)
-                return null;
-
-            if (!decimal.TryParse(
-                root.Element("battery_percent")?.Value,
-                NumberStyles.Float,
-                CultureInfo.InvariantCulture,
-                out decimal percent))
-            {
-                return null;
-            }
-
-            if (percent < 0 || percent > 100)
-                return null;
-
-            bool.TryParse(
-                root.Element("charging")?.Value,
-                out bool charging);
-
-            return new BatteryInfo(
-                percent,
-                charging,
-                root.Element("last_update")?.Value ?? "неизвестно");
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private async Task RefreshAsync()
-    {
-        if (_updating || _disposed)
-            return;
-
-        _updating = true;
-        try
-        {
-            var mouseTask = ReadBatteryAsync("dev00000004");
-            var headsetTask = ReadBatteryAsync("dev00000003");
-
-            await Task.WhenAll(mouseTask, headsetTask);
-
-            if (_disposed)
-                return;
-
-            _mouse = await mouseTask;
-            _headset = await headsetTask;
-            UpdateText();
-        }
-        finally
-        {
-            _updating = false;
-        }
-    }
+    // Comes from the G HUB loop thread; XAML may only be touched on the UI thread.
+    private void OnGHubChanged() => _ui?.TryEnqueue(UpdateText);
 
     private void UpdateText()
     {
+        if (_disposed)
+            return;
+
         if (_previewText is not null)
             _previewText.Text = PreviewText();
 
@@ -198,62 +128,39 @@ public sealed class MainPlugin :
             _flyoutText.Text = FlyoutText();
     }
 
-    private void UpdateTimer()
+    private void UpdateActive()
     {
-        if (_disposed || _timer is null)
-            return;
-
-        if ((Context?.IsPreviewVisible ?? true) || _flyoutVisible)
-            _timer.Start();
-        else
-            _timer.Stop();
+        if (!_disposed)
+            _ghub.SetActive((Context?.IsPreviewVisible ?? true) || _flyoutVisible);
     }
 
-    private void OnPreviewVisibilityChanged(object? sender, bool isVisible)
-    {
-        UpdateTimer();
-        if (isVisible)
-            _ = RefreshAsync();
-    }
-
-    private async void OnTimerTick(object? sender, object e)
-    {
-        await RefreshAsync();
-    }
+    private void OnPreviewVisibilityChanged(object? sender, bool isVisible) =>
+        UpdateActive();
 
     public void OnFlyoutShown()
     {
         _flyoutVisible = true;
         UpdateText();
-        UpdateTimer();
-        _ = RefreshAsync();
+        UpdateActive();
     }
 
     public void OnFlyoutHidden()
     {
         _flyoutVisible = false;
-        UpdateTimer();
+        UpdateActive();
     }
 
-    public override ValueTask DisposeAsync()
+    public override async ValueTask DisposeAsync()
     {
         _disposed = true;
 
         if (Context is not null)
             Context.PreviewVisibilityChanged -= OnPreviewVisibilityChanged;
 
-        if (_timer is not null)
-        {
-            _timer.Stop();
-            _timer.Tick -= OnTimerTick;
-        }
+        _ghub.Changed -= OnGHubChanged;
+        await _ghub.DisposeAsync();
 
-        _shutdown.Cancel();
-        _http.Dispose();
-        _timer = null;
         _previewText = null;
         _flyoutText = null;
-
-        return ValueTask.CompletedTask;
     }
 }
