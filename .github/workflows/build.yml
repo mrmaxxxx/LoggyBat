@@ -134,10 +134,26 @@ jobs:
             Remove-Item $pfx -Force -ErrorAction SilentlyContinue
           }
 
-      - name: Upload installation files
+      # Two download kits instead of the whole AppPackages folder (see the script for what is left out).
+      - name: Assemble download kits
+        shell: pwsh
+        run: |
+          ./scripts/New-DownloadKits.ps1 `
+            -AppPackages (Join-Path $env:GITHUB_WORKSPACE 'AppPackages') `
+            -Out (Join-Path $env:GITHUB_WORKSPACE 'kits')
+
+      - name: Upload update kit
         uses: actions/upload-artifact@v4
         with:
-          name: LoggyBat-x64
-          path: AppPackages/
+          name: LoggyBat-update-x64-${{ env.VERSION }}
+          path: kits/update/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload first-install kit
+        uses: actions/upload-artifact@v4
+        with:
+          name: LoggyBat-first-install-x64-${{ env.VERSION }}
+          path: kits/first-install/
           if-no-files-found: error
           retention-days: 7
