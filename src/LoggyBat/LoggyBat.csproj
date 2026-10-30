@@ -30,7 +30,7 @@
   <PropertyGroup>
     <WidBarPluginId>com.mrmaxxxx.loggybat</WidBarPluginId>
     <WidBarPluginName>LoggyBat</WidBarPluginName>
-    <WidBarPluginDescription>Mouse and headset battery levels from Logitech G HUB.</WidBarPluginDescription>
+    <WidBarPluginDescription>Battery levels of Logitech wireless devices from G HUB.</WidBarPluginDescription>
     <WidBarPluginCategory>Utility</WidBarPluginCategory>
     <WidBarPluginVersion>1.0.0</WidBarPluginVersion>
     <WidBarPluginPreviewWidth>190</WidBarPluginPreviewWidth>
