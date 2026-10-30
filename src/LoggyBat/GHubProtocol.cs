@@ -8,7 +8,20 @@ public static class GHubProtocol
 {
     // Id is G HUB's devNNNNNNNN: unique right now, but it changes when G HUB restarts.
     // Model is deviceModel, e.g. "g502x_plus": the same for every unit of a model.
-    public sealed record Device(string Id, string Type, string Name, string Model, bool Active);
+    // State is G HUB's device state: ACTIVE, or e.g. NOT_CONNECTED for a switched-off LIGHTSPEED mouse.
+    public sealed record Device(string Id, string Type, string Name, string Model, string State)
+    {
+        public bool Active => State == "ACTIVE";
+    }
+
+    public static readonly string[] ChangeEventPaths = ["/devices/state/changed", "/battery/state/changed"];
+
+    // G HUB pushes these (verb BROADCAST, its own msgId) after SUBSCRIBE; seen 2026-10-30
+    // when a mouse was switched off and on. Only a signal to re-read: the payload is not trusted.
+    public static bool IsChangeEvent(JsonElement message) =>
+        message.ValueKind == JsonValueKind.Object &&
+        Str(message, "path") is { } path &&
+        ChangeEventPaths.Contains(path);
 
     public sealed record Battery(int Percent, bool Charging);
 
@@ -50,7 +63,7 @@ public static class GHubProtocol
                     (Str(device, "deviceType") ?? "").ToUpperInvariant(),
                     name,
                     Str(device, "deviceModel") is { Length: > 0 } model ? model : name,
-                    Str(device, "state") == "ACTIVE"));
+                    Str(device, "state") ?? ""));
             }
         }
 

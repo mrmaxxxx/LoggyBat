@@ -10,7 +10,7 @@ internal sealed class GHubException(string message) : Exception(message);
 // One connection to G HUB at a time, owned by a single control loop:
 // connect -> every PollInterval re-read the device list and each battery ->
 // on any failure drop the socket and reconnect with backoff.
-// Polling, not SUBSCRIBE events: the events are not verified yet.
+// G HUB change events (SUBSCRIBE) trigger an immediate re-read; the 10 s poll stays as a fallback.
 public sealed class GHubClient : IAsyncDisposable
 {
     public static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(10);
@@ -138,6 +138,21 @@ public sealed class GHubClient : IAsyncDisposable
 
         try
         {
+            // G HUB sends no reply to SUBSCRIBE; its events only wake the loop (see Dispatch).
+            using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                timeout.CancelAfter(RequestTimeout);
+                try
+                {
+                    foreach (string path in GHubProtocol.ChangeEventPaths)
+                        await SendAsync(socket, new { msgId = "", verb = "SUBSCRIBE", path }, timeout.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    throw new GHubException("G HUB не отвечает");
+                }
+            }
+
             while (true)
             {
                 await PollAsync(newConnection: !_polledThisSession, ct);
@@ -184,9 +199,10 @@ public sealed class GHubClient : IAsyncDisposable
             if (rows[i].GoneSince is not null)
                 continue;
 
-            if (!devices.First(d => d.Id == rows[i].Id).Active)
+            var device = devices.First(d => d.Id == rows[i].Id);
+            if (!device.Active)
             {
-                rows[i] = DeviceList.WithProblem(rows[i], DeviceList.InactiveProblem);
+                rows[i] = DeviceList.WithProblem(rows[i], DeviceList.InactiveProblem(device.State));
                 continue;
             }
 
@@ -208,18 +224,7 @@ public sealed class GHubClient : IAsyncDisposable
         timeout.CancelAfter(RequestTimeout);
         try
         {
-            byte[] message = JsonSerializer.SerializeToUtf8Bytes(new { msgId = id, verb = "GET", path });
-
-            await _sendLock.WaitAsync(timeout.Token);
-            try
-            {
-                await socket.SendAsync(message.AsMemory(), WebSocketMessageType.Text, true, timeout.Token);
-            }
-            finally
-            {
-                _sendLock.Release();
-            }
-
+            await SendAsync(socket, new { msgId = id, verb = "GET", path }, timeout.Token);
             return await reply.Task.WaitAsync(timeout.Token);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -229,6 +234,22 @@ public sealed class GHubClient : IAsyncDisposable
         finally
         {
             _pending.TryRemove(id, out _);
+        }
+    }
+
+    // Every send goes through here: ClientWebSocket allows only one send at a time.
+    private async Task SendAsync(ClientWebSocket socket, object message, CancellationToken token)
+    {
+        byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(message);
+
+        await _sendLock.WaitAsync(token);
+        try
+        {
+            await socket.SendAsync(bytes.AsMemory(), WebSocketMessageType.Text, true, token);
+        }
+        finally
+        {
+            _sendLock.Release();
         }
     }
 
@@ -281,6 +302,12 @@ public sealed class GHubClient : IAsyncDisposable
                 _pending.TryRemove(id.GetString()!, out var reply))
             {
                 reply.TrySetResult(doc.RootElement.Clone());
+            }
+            else if (GHubProtocol.IsChangeEvent(doc.RootElement))
+            {
+                // A burst of events sets the one-slot _wake once: it becomes one re-read,
+                // done by the same loop, so polls never run in parallel.
+                Wake();
             }
         }
         catch (JsonException)

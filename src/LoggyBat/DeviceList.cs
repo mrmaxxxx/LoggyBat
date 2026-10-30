@@ -29,7 +29,10 @@ public static class DeviceList
 
     public const string Connecting = "подключение к G HUB…";
     public const string GoneProblem = "исчезло из списка G HUB";
-    public const string InactiveProblem = "не активно в G HUB";
+
+    // NOT_CONNECTED is what G HUB reported for a switched-off LIGHTSPEED mouse (2026-10-30).
+    public static string InactiveProblem(string state) =>
+        state == "NOT_CONNECTED" ? "не подключено (выключено?)" : "не активно в G HUB";
 
     // Builds the rows from a fresh G HUB list. Rows are matched only by dev-id and
     // only within the same connection; after a reconnect the list starts over,
