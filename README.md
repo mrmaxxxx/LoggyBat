@@ -7,7 +7,7 @@
 LoggyBat — не отдельная панель и не замена WidBar. Это виджет: на панель задач
 Windows 11 его выводит приложение [WidBar](https://apps.microsoft.com/detail/9PKLDNM83TP9),
 а заряд устройств он получает из запущенного Logitech G HUB.
-Для работы нужны **WidBar** и **запущенный Logitech G HUB**. LGSTrayBattery не требуется.
+Для работы нужны **WidBar** и **запущенный Logitech G HUB**.
 
 <img src="docs/images/widget-taskbar.png" width="420" alt="LoggyBat на панели WidBar: мышь 88%, наушники 69%, открыт flyout с временем ответа G HUB">
 
