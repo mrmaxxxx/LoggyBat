@@ -1,8 +1,9 @@
-﻿# Creates the permanent LoggyBat signing certificate (CN=Max). Run once, by Max, on his PC.
-# Result, in a folder OUTSIDE the repository:
-#   LoggyBat-signing.pfx  private key + certificate: keep it safe, never commit it
+﻿# Creates the permanent LoggyBat development signing certificate (CN=Max,
+# must equal Publisher in src\LoggyBat.Package\Package.appxmanifest).
+# Run once, by Max, on his PC. Result, in a folder OUTSIDE the repository:
+#   LoggyBat-signing.pfx  private key, password-protected: keep it safe, never commit or share it
 #   LoggyBat.cer          public certificate: install into "Trusted People"
-# The base64 of the .pfx is copied to the clipboard for the GitHub secret SIGNING_PFX_BASE64.
+# The script prints no key and no password; copying the key to GitHub is a separate step.
 
 param(
     [string]$OutDir = (Join-Path $HOME 'LoggyBat-signing')
@@ -10,12 +11,23 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$pfxPath = Join-Path $OutDir 'LoggyBat-signing.pfx'
-if (Test-Path $pfxPath) {
-    throw "$pfxPath already exists. Delete it yourself if you really want a new certificate: updates of the installed app need the same one."
+$OutDir = [IO.Path]::GetFullPath($OutDir)
+$repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+if (($OutDir + '\').StartsWith($repo + '\', [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Папка $OutDir внутри репозитория. Ключ нельзя хранить в репозитории: укажите другую папку."
 }
 
-$password = Read-Host 'Придумайте пароль для сертификата (он же пойдёт в секрет SIGNING_PFX_PASSWORD)' -AsSecureString
+$pfxPath = Join-Path $OutDir 'LoggyBat-signing.pfx'
+if (Test-Path $pfxPath) {
+    throw "$pfxPath уже есть. Новый сертификат не создан: обновления установленного приложения требуют прежний."
+}
+
+function Plain([securestring]$s) { [Net.NetworkCredential]::new('', $s).Password }
+
+$password = Read-Host 'Придумайте пароль для сертификата (не меньше 12 символов)' -AsSecureString
+$again = Read-Host 'Повторите пароль' -AsSecureString
+if ((Plain $password).Length -lt 12) { throw 'Пароль короче 12 символов. Ничего не создано.' }
+if ((Plain $password) -cne (Plain $again)) { throw 'Пароли не совпадают. Ничего не создано.' }
 
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 
@@ -36,7 +48,8 @@ $cert = New-SelfSignedCertificate `
     )
 
 try {
-    Export-PfxCertificate -Cert $cert -FilePath $pfxPath -Password $password | Out-Null
+    Export-PfxCertificate -Cert $cert -FilePath $pfxPath -Password $password `
+        -CryptoAlgorithmOption AES256_SHA256 | Out-Null
     Export-Certificate -Cert $cert -FilePath (Join-Path $OutDir 'LoggyBat.cer') | Out-Null
 }
 finally {
@@ -44,9 +57,6 @@ finally {
     Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)"
 }
 
-[Convert]::ToBase64String([IO.File]::ReadAllBytes($pfxPath)) | Set-Clipboard
-
 Write-Host ''
 Write-Host "Готово: $OutDir"
-Write-Host "Отпечаток: $($cert.Thumbprint), действует до $($cert.NotAfter.ToString('d'))"
-Write-Host 'Base64 сертификата скопирован в буфер обмена: вставьте его в секрет SIGNING_PFX_BASE64.'
+Write-Host "Владелец: $($cert.Subject), отпечаток: $($cert.Thumbprint), действует до $($cert.NotAfter.ToString('d'))"

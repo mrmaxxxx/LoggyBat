@@ -4,3 +4,8 @@ obj/
 *.user
 AppPackages/
 BundleArtifacts/
+
+# Signing keys must never be committed
+*.pfx
+*.p12
+*.snk

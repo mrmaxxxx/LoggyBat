@@ -120,14 +120,22 @@ Identity и Publisher — это будет новое приложение дл
    ```powershell
    powershell -ExecutionPolicy Bypass -File scripts\New-SigningCertificate.ps1
    ```
-   Скрипт спросит пароль и создаст папку `%USERPROFILE%\LoggyBat-signing`:
-   `LoggyBat-signing.pfx` (закрытый ключ — хранить, никому не отдавать, не класть
-   в репозиторий) и `LoggyBat.cer` (публичный). Base64 ключа окажется в буфере обмена.
-2. GitHub → репозиторий → Settings → Secrets and variables → Actions →
+   Скрипт дважды спросит пароль (от 12 символов) и создаст папку `%USERPROFILE%\LoggyBat-signing`:
+   `LoggyBat-signing.pfx` (закрытый ключ под паролем, AES-256 — хранить, никому не отдавать,
+   не класть в репозиторий) и `LoggyBat.cer` (публичный). Ключ и пароль скрипт не выводит,
+   папку внутри репозитория не принимает, существующий ключ не перезаписывает.
+   Сделать резервную копию `.pfx` и запомнить пароль: без них не будет обновлений.
+2. Скопировать ключ в буфер обмена в виде Base64:
+   ```powershell
+   [Convert]::ToBase64String([IO.File]::ReadAllBytes("$HOME\LoggyBat-signing\LoggyBat-signing.pfx")) | Set-Clipboard
+   ```
+   GitHub → репозиторий → Settings → Secrets and variables → Actions →
    New repository secret:
    - `SIGNING_PFX_BASE64` — вставить из буфера обмена;
    - `SIGNING_PFX_PASSWORD` — пароль из шага 1.
-3. Доверять сертификату (PowerShell **от администратора**):
+3. Сразу очистить буфер обмена **и его журнал** (Win+V хранит копии):
+   Win+V → «Очистить все» (или Параметры → Система → Буфер обмена → Очистить).
+4. Доверять сертификату (PowerShell **от администратора**):
    ```powershell
    Import-Certificate -FilePath "$HOME\LoggyBat-signing\LoggyBat.cer" -CertStoreLocation Cert:\LocalMachine\TrustedPeople
    ```
