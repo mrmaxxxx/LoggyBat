@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Net.WebSockets;
 using System.Text.Json;
 
-namespace WidBarWidget1.ExtensionApp;
+namespace LoggyBat;
 
 // What the widget knows about one device. ReceivedAt is when G HUB last returned
 // a charge for it, not when the battery was measured (G HUB does not say that).

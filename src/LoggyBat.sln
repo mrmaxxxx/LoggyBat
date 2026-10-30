@@ -2,9 +2,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WidBarWidget1.ExtensionApp", "WidBarWidget1.ExtensionApp\WidBarWidget1.ExtensionApp.csproj", "{22222222-3333-4444-5555-666666666666}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LoggyBat", "LoggyBat\LoggyBat.csproj", "{22222222-3333-4444-5555-666666666666}"
 EndProject
-Project("{C7167F0D-BC9F-4E6E-AFE1-012C56B48DB5}") = "WidBarWidget1 (Package)", "WidBarWidget1 (Package)\WidBarWidget1 (Package).wapproj", "{11111111-2222-3333-4444-555555555555}"
+Project("{C7167F0D-BC9F-4E6E-AFE1-012C56B48DB5}") = "LoggyBat.Package", "LoggyBat.Package\LoggyBat.Package.wapproj", "{11111111-2222-3333-4444-555555555555}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

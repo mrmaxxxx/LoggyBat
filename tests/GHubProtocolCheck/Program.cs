@@ -1,5 +1,5 @@
 using System.Text.Json;
-using WidBarWidget1.ExtensionApp;
+using LoggyBat;
 
 // Replies trimmed from lghub_agent on Max's PC, 2026-10-30.
 const string List = """

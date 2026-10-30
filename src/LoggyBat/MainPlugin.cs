@@ -5,7 +5,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using WidBar.SDK;
 
-namespace WidBarWidget1.ExtensionApp;
+namespace LoggyBat;
 
 public sealed class MainPlugin :
     WidgetPluginBase,
@@ -22,8 +22,8 @@ public sealed class MainPlugin :
     private bool _flyoutVisible;
     private bool _disposed;
 
-    public override string Id => "com.example.mywidget";
-    public override string Name => "Logitech Battery";
+    public override string Id => "com.mrmaxxxx.loggybat";
+    public override string Name => "LoggyBat";
 
     public override int PreviewLogicalWidth => 190;
     public override int FlyoutWidth => 360;
@@ -77,7 +77,7 @@ public sealed class MainPlugin :
 
         panel.Children.Add(new TextBlock
         {
-            Text = "Logitech Battery",
+            Text = "LoggyBat",
             FontSize = 20,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
         });

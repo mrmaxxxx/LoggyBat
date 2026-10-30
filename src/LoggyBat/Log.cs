@@ -1,4 +1,4 @@
-namespace WidBarWidget1.ExtensionApp;
+namespace LoggyBat;
 
 // Small diagnostic log: %LOCALAPPDATA%\LoggyBat\loggybat.log. Inside MSIX Windows
 // redirects it to %LOCALAPPDATA%\Packages\<package>\LocalCache\Local\LoggyBat\.

@@ -1,4 +1,4 @@
-name: Build Logitech Battery
+name: Build LoggyBat
 
 on:
   workflow_dispatch:
@@ -33,7 +33,7 @@ jobs:
       - name: Build package
         shell: pwsh
         run: |
-          $project = Join-Path $env:GITHUB_WORKSPACE 'templates\standalone\WidBarWidget1 (Package)\WidBarWidget1 (Package).wapproj'
+          $project = Join-Path $env:GITHUB_WORKSPACE 'src\LoggyBat.Package\LoggyBat.Package.wapproj'
           $output = Join-Path $env:GITHUB_WORKSPACE 'AppPackages'
 
           msbuild $project /restore /m `
@@ -66,8 +66,8 @@ jobs:
 
           $cert = New-SelfSignedCertificate `
             -Type Custom `
-            -Subject 'CN=Developer' `
-            -FriendlyName 'Logitech Battery Test Certificate' `
+            -Subject 'CN=Max' `
+            -FriendlyName 'LoggyBat Test Certificate' `
             -KeyUsage DigitalSignature `
             -KeyAlgorithm RSA `
             -KeyLength 2048 `
@@ -87,7 +87,7 @@ jobs:
             -Password $password | Out-Null
 
           Export-Certificate -Cert $cert `
-            -FilePath (Join-Path $output 'LogitechBattery.cer') |
+            -FilePath (Join-Path $output 'LoggyBat.cer') |
             Out-Null
 
           $sdkBin = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
@@ -100,7 +100,7 @@ jobs:
           }
 
                     Import-Certificate `
-            -FilePath (Join-Path $output 'LogitechBattery.cer') `
+            -FilePath (Join-Path $output 'LoggyBat.cer') `
             -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' |
             Out-Null
 
@@ -127,7 +127,7 @@ jobs:
       - name: Upload installation files
         uses: actions/upload-artifact@v4
         with:
-          name: LogitechBattery-x64
+          name: LoggyBat-x64
           path: AppPackages/
           if-no-files-found: error
           retention-days: 7

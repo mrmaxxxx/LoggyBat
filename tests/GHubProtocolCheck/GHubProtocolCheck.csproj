@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\templates\standalone\WidBarWidget1.ExtensionApp\GHubProtocol.cs" Link="GHubProtocol.cs" />
+    <Compile Include="..\..\src\LoggyBat\GHubProtocol.cs" Link="GHubProtocol.cs" />
   </ItemGroup>
 
 </Project>

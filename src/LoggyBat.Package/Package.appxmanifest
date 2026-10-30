@@ -9,13 +9,13 @@
 
   <!-- Update Publisher to match your signing certificate / Store identity. -->
   <Identity
-    Name="Max.LogitechBattery.Widget"
-    Publisher="CN=Developer"
+    Name="Max.LoggyBat"
+    Publisher="CN=Max"
     Version="1.0.0.0" />
 
   <Properties>
-    <DisplayName>Logitech Battery</DisplayName>
-    <PublisherDisplayName>Developer</PublisherDisplayName>
+    <DisplayName>LoggyBat</DisplayName>
+    <PublisherDisplayName>Max</PublisherDisplayName>
     <Logo>Images\StoreLogo.png</Logo>
   </Properties>
 
@@ -33,8 +33,8 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="$targetentrypoint$">
       <uap:VisualElements
-        DisplayName="Logitech Battery"
-        Description="Mouse and headset battery levels from LGSTrayBattery."
+        DisplayName="LoggyBat"
+        Description="Mouse and headset battery levels from Logitech G HUB."
         BackgroundColor="transparent" Square150x150Logo="Images\MediumTile.png" Square44x44Logo="Images\AppIcon.png">
         <uap:DefaultTile Square71x71Logo="Images\SmallTile.png" Wide310x150Logo="Images\WideTile.png" Square310x310Logo="Images\LargeTile.png"/>
         <uap:SplashScreen Image="Images\SplashScreen.png"/>
@@ -46,10 +46,10 @@
             Name="com.widbar.widget"
             Id="widget"
             PublicFolder="Public"
-            DisplayName="Logitech Battery"
-            Description="Mouse and headset battery levels from LGSTrayBattery.">
+            DisplayName="LoggyBat"
+            Description="Mouse and headset battery levels from Logitech G HUB.">
             <uap3:Properties>
-              <WidBarPluginId>com.example.mywidget</WidBarPluginId>
+              <WidBarPluginId>com.mrmaxxxx.loggybat</WidBarPluginId>
               <WidBarSdkVersion>2</WidBarSdkVersion>
             </uap3:Properties>
           </uap3:AppExtension>

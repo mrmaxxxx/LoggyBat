@@ -2,7 +2,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using WinRT;
 
-namespace WidBarWidget1.ExtensionApp;
+namespace LoggyBat;
 
 public static class Program
 {

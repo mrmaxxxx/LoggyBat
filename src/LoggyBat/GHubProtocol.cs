@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace WidBarWidget1.ExtensionApp;
+namespace LoggyBat;
 
 // Pure parsing of G HUB replies, no I/O, so tests/GHubProtocolCheck can cover it.
 // Message shapes were checked against lghub_agent on Max's PC on 2026-10-30.

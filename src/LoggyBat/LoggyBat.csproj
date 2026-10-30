@@ -8,8 +8,8 @@
     <WinUISDKReferences>false</WinUISDKReferences>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace>WidBarWidget1.ExtensionApp</RootNamespace>
-    <AssemblyName>WidBarWidget1.ExtensionApp</AssemblyName>
+    <RootNamespace>LoggyBat</RootNamespace>
+    <AssemblyName>LoggyBat</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Platforms>x64;ARM64</Platforms>
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
@@ -28,9 +28,9 @@
        obj\widbar\plugin.json at build time. The packaging project picks that
        file up, so id/name/version only live here. -->
   <PropertyGroup>
-    <WidBarPluginId>com.example.mywidget</WidBarPluginId>
-    <WidBarPluginName>Logitech Battery</WidBarPluginName>
-    <WidBarPluginDescription>Mouse and headset battery levels from LGSTrayBattery.</WidBarPluginDescription>
+    <WidBarPluginId>com.mrmaxxxx.loggybat</WidBarPluginId>
+    <WidBarPluginName>LoggyBat</WidBarPluginName>
+    <WidBarPluginDescription>Mouse and headset battery levels from Logitech G HUB.</WidBarPluginDescription>
     <WidBarPluginCategory>Utility</WidBarPluginCategory>
     <WidBarPluginVersion>1.0.0</WidBarPluginVersion>
     <WidBarPluginPreviewWidth>190</WidBarPluginPreviewWidth>
