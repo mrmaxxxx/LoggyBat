@@ -1,2 +1,5 @@
 # Official license texts are stored byte-for-byte (their SHA256 is checked by the build)
 licenses/** -text
+
+# Notice texts are copied into the package byte for byte; keep LF on every checkout (incl. Windows CI)
+THIRD_PARTY_NOTICES.md text eol=lf
