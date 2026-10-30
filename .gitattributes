@@ -1,0 +1,2 @@
+# Official license texts are stored byte-for-byte (their SHA256 is checked by the build)
+licenses/** -text

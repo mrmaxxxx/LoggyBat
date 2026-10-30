@@ -52,6 +52,12 @@
       <Link>Public\plugin.json</Link>
     </Content>
     <Content Include="Images\*.png" />
+    <!-- License and third-party notice files travel inside the installed package, so a user who gets
+         only the MSIX still has them. Notices\ is filled by scripts\Collect-Notices.ps1 before the build. -->
+    <Content Include="..\..\THIRD_PARTY_NOTICES.md">
+      <Link>Notices\THIRD_PARTY_NOTICES.md</Link>
+    </Content>
+    <Content Include="Notices\**\*" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\LoggyBat\LoggyBat.csproj">

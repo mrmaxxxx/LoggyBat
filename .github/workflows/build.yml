@@ -43,6 +43,22 @@ jobs:
           "VERSION=$version" >> $env:GITHUB_ENV
           Write-Host "Package version: $version"
 
+      # Restore first, so the license/notice files of the exact resolved package versions can be
+      # copied into the package before it is built (they must travel inside the MSIX too).
+      - name: Restore packages
+        shell: pwsh
+        run: |
+          msbuild (Join-Path $env:GITHUB_WORKSPACE 'src\LoggyBat.Package\LoggyBat.Package.wapproj') /t:Restore `
+            /p:Configuration=Release /p:Platform=x64 /p:RuntimeIdentifier=win-x64
+          if ($LASTEXITCODE -ne 0) { throw "Restore failed." }
+
+      - name: Collect license notices
+        shell: pwsh
+        run: |
+          ./scripts/Collect-Notices.ps1 `
+            -Assets (Join-Path $env:GITHUB_WORKSPACE 'src\LoggyBat\obj\project.assets.json') `
+            -Out (Join-Path $env:GITHUB_WORKSPACE 'src\LoggyBat.Package\Notices')
+
       - name: Build package
         shell: pwsh
         run: |
@@ -75,6 +91,16 @@ jobs:
           if ($msix.Count -ne 1) { throw "Expected one app MSIX, found $($msix.Count)." }
           ./scripts/Test-WinUIVersion.ps1 -Msix $msix[0].FullName `
             -Project (Join-Path $env:GITHUB_WORKSPACE 'src\LoggyBat\LoggyBat.csproj')
+
+      # The texts themselves must be inside the MSIX, not just listed (see the script).
+      - name: Check license notices
+        shell: pwsh
+        run: |
+          $msix = @(Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE 'AppPackages') -Recurse -File -Filter *.msix |
+            Where-Object FullName -notmatch '[\\/]Dependencies[\\/]')
+          if ($msix.Count -ne 1) { throw "Expected one app MSIX, found $($msix.Count)." }
+          ./scripts/Test-Notices.ps1 -Msix $msix[0].FullName `
+            -Assets (Join-Path $env:GITHUB_WORKSPACE 'src\LoggyBat\obj\project.assets.json')
 
       # The same CN=Max certificate every time, from repository secrets
       # (see docs/HANDOFF.md). The private key lives only in RUNNER_TEMP
@@ -151,7 +177,10 @@ jobs:
         run: |
           ./scripts/New-DownloadKits.ps1 `
             -AppPackages (Join-Path $env:GITHUB_WORKSPACE 'AppPackages') `
-            -Out (Join-Path $env:GITHUB_WORKSPACE 'kits')
+            -Out (Join-Path $env:GITHUB_WORKSPACE 'kits') `
+            -NoticeSources @(
+              (Join-Path $env:GITHUB_WORKSPACE 'src\LoggyBat.Package\Notices'),
+              (Join-Path $env:GITHUB_WORKSPACE 'THIRD_PARTY_NOTICES.md'))
 
       - name: Upload update kit
         uses: actions/upload-artifact@v4

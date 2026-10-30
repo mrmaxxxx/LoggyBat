@@ -9,3 +9,6 @@ BundleArtifacts/
 *.pfx
 *.p12
 *.snk
+
+# Filled by scripts/Collect-Notices.ps1 during the build
+src/LoggyBat.Package/Notices/
