@@ -35,6 +35,7 @@
     <WidBarPluginVersion>1.0.0</WidBarPluginVersion>
     <WidBarPluginPreviewWidth>190</WidBarPluginPreviewWidth>
     <WidBarPluginConfigurable>false</WidBarPluginConfigurable>
+    <Copyright>Copyright (c) 2026 mrmaxxxx</Copyright>
   </PropertyGroup>
 
   <ItemGroup>

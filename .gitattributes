@@ -3,3 +3,5 @@ licenses/** -text
 
 # Notice texts are copied into the package byte for byte; keep LF on every checkout (incl. Windows CI)
 THIRD_PARTY_NOTICES.md text eol=lf
+LICENSE text eol=lf
+TERMS.md text eol=lf
