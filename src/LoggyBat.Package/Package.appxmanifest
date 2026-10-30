@@ -7,11 +7,11 @@
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="uap uap3 rescap">
 
-  <!-- Update Publisher to match your signing certificate / Store identity. -->
+  <!-- Publisher must match the signing certificate (CN=Max). Version is set by CI: 1.1.<run number>.0. -->
   <Identity
     Name="Max.LoggyBat"
     Publisher="CN=Max"
-    Version="1.0.0.0" />
+    Version="1.1.0.0" />
 
   <Properties>
     <DisplayName>LoggyBat</DisplayName>
