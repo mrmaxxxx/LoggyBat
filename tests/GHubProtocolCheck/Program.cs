@@ -132,8 +132,7 @@ var on1 = Poll([], listed, true, now, Charge92);
 var off1 = Poll(on1, off, false, now.AddSeconds(2), Charge92);
 Check(off1.Count == 2, "switched-off mouse stays one row, no duplicate");
 Check(DeviceList.PreviewText(off1, now.AddSeconds(2)) == "🖱 —   🎧 92%", "mouse off: mouse —, headset still shown");
-Check(DeviceList.FlyoutText(off1, null, now.AddSeconds(2)).Contains("🖱 G502 X PLUS: —
-Нет данных: не подключено (выключено?)"), "mouse off: flyout says 'не подключено (выключено?)'");
+Check(DeviceList.FlyoutText(off1, null, now.AddSeconds(2)).Contains("🖱 G502 X PLUS: —\nНет данных: не подключено (выключено?)"), "mouse off: flyout says 'не подключено (выключено?)'");
 Check(DeviceList.InactiveProblem("SOMETHING_ELSE") == "не активно в G HUB", "other inactive states keep the old text");
 var on2 = Poll(off1, listed, false, now.AddSeconds(12), Charge92);
 Check(DeviceList.PreviewText(on2, now.AddSeconds(12)) == "🖱 92%   🎧 92%", "mouse back on: charge shown again");
