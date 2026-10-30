@@ -289,6 +289,13 @@ G HUB работает:
   WidBar — https://apps.microsoft.com/detail/9PKLDNM83TP9 (Microsoft Store),
   Logitech G HUB — https://www.logitechg.com/software/ghub.
 
+### Открыто перед первым публичным релизом
+
+- Проверить лицензии и уведомления библиотек, которые попадают в MSIX (.NET, Windows App SDK,
+  WidBar.SDK и др.), и при необходимости дополнить `THIRD_PARTY_NOTICES.md`.
+  Уведомление MIT шаблона andelby/widbar-widget-template уже добавлено.
+- Решить, нужна ли собственная лицензия для кода LoggyBat (сейчас не назначена).
+
 ### Не проверено (не описывать как проверенное)
 
 - Обновление двойным щелчком по MSIX (App Installer) — подтверждён только `Add-AppxPackage`.

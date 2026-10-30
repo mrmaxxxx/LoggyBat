@@ -97,3 +97,4 @@ Windows 11 его выводит приложение [WidBar](https://apps.micr
 
 Проект создан на основе шаблона
 [andelby/widbar-widget-template](https://github.com/andelby/widbar-widget-template).
+Лицензия и авторство шаблона — в [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
