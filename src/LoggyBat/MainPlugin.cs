@@ -11,9 +11,6 @@ public sealed class MainPlugin :
     WidgetPluginBase,
     IWidgetFlyoutLifecycle
 {
-    // A charge older than this is not shown: G HUB stopped confirming it.
-    private static readonly TimeSpan StaleAfter = GHubClient.PollInterval * 4;
-
     private readonly GHubClient _ghub = new();
     private DispatcherQueue? _ui;
     private TextBlock? _previewText;
@@ -69,11 +66,15 @@ public sealed class MainPlugin :
             TextWrapping = TextWrapping.Wrap
         };
 
-        var panel = new StackPanel
+        // Same look as the former StackPanel (padding 20, gap 12); the Grid gives the
+        // list a bounded height so a long list scrolls inside the fixed-size flyout.
+        var panel = new Grid
         {
-            Spacing = 12,
+            RowSpacing = 12,
             Padding = new Thickness(20)
         };
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
         panel.Children.Add(new TextBlock
         {
@@ -81,37 +82,24 @@ public sealed class MainPlugin :
             FontSize = 20,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
         });
-        panel.Children.Add(_flyoutText);
+
+        var list = new ScrollViewer
+        {
+            Content = _flyoutText,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+        Grid.SetRow(list, 1);
+        panel.Children.Add(list);
 
         return panel;
     }
 
-    private static bool IsFresh(DeviceReading r) =>
-        r.Percent is not null &&
-        r.Problem is null &&
-        r.ReceivedAt is { } at &&
-        DateTimeOffset.Now - at < StaleAfter;
-
-    private static string Percentage(DeviceReading r) =>
-        IsFresh(r)
-            ? r.Percent + "%" + (r.Charging ? " ⚡" : "")
-            : "—";
-
-    // Receive time only: G HUB does not report when the battery was measured.
-    // Kept short: the flyout has a fixed height.
-    private static string Status(DeviceReading r) =>
-        IsFresh(r) ? $"Ответ G HUB: {r.ReceivedAt:HH:mm:ss}"
-        : r.Problem is not null ? $"Нет данных: {r.Problem}"
-        : "Нет данных: G HUB давно не отвечал";
-
     private string PreviewText() =>
-        $"🖱 {Percentage(_ghub.Mouse)}   🎧 {Percentage(_ghub.Headset)}";
+        DeviceList.PreviewText(_ghub.Devices, DateTimeOffset.Now);
 
     private string FlyoutText() =>
-        $"🖱 G502 X PLUS: {Percentage(_ghub.Mouse)}\n" +
-        $"{Status(_ghub.Mouse)}\n\n" +
-        $"🎧 PRO X Wireless: {Percentage(_ghub.Headset)}\n" +
-        $"{Status(_ghub.Headset)}";
+        DeviceList.FlyoutText(_ghub.Devices, _ghub.Problem, DateTimeOffset.Now);
 
     // Comes from the G HUB loop thread; XAML may only be touched on the UI thread.
     private void OnGHubChanged() => _ui?.TryEnqueue(UpdateText);

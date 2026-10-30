@@ -5,18 +5,6 @@ using System.Text.Json;
 
 namespace LoggyBat;
 
-// What the widget knows about one device. ReceivedAt is when G HUB last returned
-// a charge for it, not when the battery was measured (G HUB does not say that).
-public sealed record DeviceReading(
-    int? Percent,
-    bool Charging,
-    DateTimeOffset? ReceivedAt,
-    string? Problem)
-{
-    public static readonly DeviceReading None =
-        new(null, false, null, "ждём ответа G HUB");
-}
-
 internal sealed class GHubException(string message) : Exception(message);
 
 // One connection to G HUB at a time, owned by a single control loop:
@@ -45,11 +33,13 @@ public sealed class GHubClient : IAsyncDisposable
     private long _nextMsgId;
     private bool _polledThisSession;
     private volatile bool _active = true;
-    private volatile DeviceReading _mouse = DeviceReading.None;
-    private volatile DeviceReading _headset = DeviceReading.None;
+    private volatile IReadOnlyList<DeviceReading> _devices = [];
+    private volatile string? _problem = DeviceList.Connecting;
+    private string _logged = "";
 
-    public DeviceReading Mouse => _mouse;
-    public DeviceReading Headset => _headset;
+    // Both are replaced as a whole, never mutated, so the UI thread can read them any time.
+    public IReadOnlyList<DeviceReading> Devices => _devices;
+    public string? Problem => _problem; // null while G HUB answers
 
     // Raised on a background thread after every poll and every failure.
     public event Action? Changed;
@@ -150,7 +140,7 @@ public sealed class GHubClient : IAsyncDisposable
         {
             while (true)
             {
-                await PollAsync(ct);
+                await PollAsync(newConnection: !_polledThisSession, ct);
                 _polledThisSession = true;
 
                 DateTime polledAt = DateTime.UtcNow;
@@ -177,35 +167,34 @@ public sealed class GHubClient : IAsyncDisposable
         }
     }
 
-    private async Task PollAsync(CancellationToken ct)
+    private async Task PollAsync(bool newConnection, CancellationToken ct)
     {
         // Re-read every time: dev-ids change when G HUB restarts or devices reconnect.
         JsonElement list = await RequestAsync("/devices/list", ct);
         string code = GHubProtocol.ResultCode(list);
-        if (code != "SUCCESS")
-            throw new GHubException($"G HUB не отдал список устройств ({code})");
+        var devices = code == "SUCCESS" ? GHubProtocol.ListBatteryDevices(list) : null;
+        if (devices is null)
+            throw new GHubException($"ошибка списка устройств G HUB ({(code.Length > 0 ? code : "нет списка")})");
 
-        var mouse = await ReadDeviceAsync(list, GHubProtocol.MousePid, _mouse, ct);
-        var headset = await ReadDeviceAsync(list, GHubProtocol.HeadsetPid, _headset, ct);
-        Publish(mouse, headset);
-    }
+        var rows = DeviceList.Reconcile(_devices, devices, newConnection, DateTimeOffset.Now).ToList();
 
-    private async Task<DeviceReading> ReadDeviceAsync(
-        JsonElement list, int pid, DeviceReading previous, CancellationToken ct)
-    {
-        var device = GHubProtocol.FindDevice(list, pid);
-        if (device is null)
-            return previous with { Percent = null, Charging = false, Problem = "нет в списке G HUB" };
+        // One request per device: an error reply for one device leaves the others intact.
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (rows[i].GoneSince is not null)
+                continue;
 
-        if (!device.Active)
-            return previous with { Percent = null, Charging = false, Problem = "не активно в G HUB" };
+            if (!devices.First(d => d.Id == rows[i].Id).Active)
+            {
+                rows[i] = DeviceList.WithProblem(rows[i], DeviceList.InactiveProblem);
+                continue;
+            }
 
-        JsonElement reply = await RequestAsync($"/battery/{device.Id}/state", ct);
-        var battery = GHubProtocol.ParseBattery(reply, out string? problem);
+            JsonElement reply = await RequestAsync($"/battery/{rows[i].Id}/state", ct);
+            rows[i] = DeviceList.ApplyBattery(rows[i], reply, DateTimeOffset.Now);
+        }
 
-        return battery is null
-            ? previous with { Percent = null, Charging = false, Problem = problem }
-            : new DeviceReading(battery.Percent, battery.Charging, DateTimeOffset.Now, null);
+        Publish(rows, null);
     }
 
     private async Task<JsonElement> RequestAsync(string path, CancellationToken ct)
@@ -300,22 +289,24 @@ public sealed class GHubClient : IAsyncDisposable
         }
     }
 
-    private void SetProblemForAll(string problem)
-    {
-        Publish(
-            _mouse with { Percent = null, Charging = false, Problem = problem },
-            _headset with { Percent = null, Charging = false, Problem = problem });
-    }
+    // No G HUB: the last known rows stay as "—" with the reason until the next
+    // successful list replaces them (a new connection starts the list over).
+    private void SetProblemForAll(string problem) =>
+        Publish(_devices.Select(r => DeviceList.WithProblem(r, problem)).ToList(), problem);
 
-    private void Publish(DeviceReading mouse, DeviceReading headset)
+    private void Publish(IReadOnlyList<DeviceReading> devices, string? problem)
     {
-        if (mouse.Problem != _mouse.Problem)
-            Log.Write($"Мышка: {mouse.Problem ?? "заряд получен"}");
-        if (headset.Problem != _headset.Problem)
-            Log.Write($"Наушники: {headset.Problem ?? "заряд получен"}");
+        // Log only when the picture changes, not on every poll.
+        string summary = (problem ?? "G HUB отвечает") + " | " + string.Join(
+            "; ", devices.Select(d => $"{d.Name} [{d.Id}]: {d.Problem ?? "заряд получен"}"));
+        if (summary != _logged)
+        {
+            Log.Write(summary);
+            _logged = summary;
+        }
 
-        _mouse = mouse;
-        _headset = headset;
+        _devices = devices;
+        _problem = problem;
         Changed?.Invoke();
     }
 

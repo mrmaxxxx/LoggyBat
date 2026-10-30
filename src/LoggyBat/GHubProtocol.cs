@@ -6,11 +6,9 @@ namespace LoggyBat;
 // Message shapes were checked against lghub_agent on Max's PC on 2026-10-30.
 public static class GHubProtocol
 {
-    // Model ids stay the same; G HUB's devNNNNNNNN ids change when it restarts.
-    public const int MousePid = 16537;   // G502 X PLUS Wireless
-    public const int HeadsetPid = 2746;  // PRO X Wireless Gaming Headset
-
-    public sealed record Device(string Id, bool Active);
+    // Id is G HUB's devNNNNNNNN: unique right now, but it changes when G HUB restarts.
+    // Model is deviceModel, e.g. "g502x_plus": the same for every unit of a model.
+    public sealed record Device(string Id, string Type, string Name, string Model, bool Active);
 
     public sealed record Battery(int Percent, bool Charging);
 
@@ -20,8 +18,9 @@ public static class GHubProtocol
             ? Str(result, "code") ?? ""
             : "";
 
-    // Finds a device by model pid in a /devices/list reply.
-    public static Device? FindDevice(JsonElement listReply, int pid)
+    // All devices with capabilities.hasBatteryStatus = true, in G HUB order;
+    // null when the /devices/list reply has no device array at all.
+    public static IReadOnlyList<Device>? ListBatteryDevices(JsonElement listReply)
     {
         if (!listReply.TryGetProperty("payload", out var payload) ||
             payload.ValueKind != JsonValueKind.Object ||
@@ -31,20 +30,31 @@ public static class GHubProtocol
             return null;
         }
 
+        var result = new List<Device>();
         foreach (var device in devices.EnumerateArray())
         {
             if (device.ValueKind == JsonValueKind.Object &&
-                device.TryGetProperty("pid", out var p) &&
-                p.ValueKind == JsonValueKind.Number &&
-                p.TryGetInt32(out int value) &&
-                value == pid &&
+                device.TryGetProperty("capabilities", out var caps) &&
+                caps.ValueKind == JsonValueKind.Object &&
+                caps.TryGetProperty("hasBatteryStatus", out var hasBattery) &&
+                hasBattery.ValueKind == JsonValueKind.True &&
                 Str(device, "id") is { Length: > 0 } id)
             {
-                return new Device(id, Str(device, "state") == "ACTIVE");
+                string name =
+                    Str(device, "displayName") is { Length: > 0 } display ? display
+                    : Str(device, "extendedDisplayName") is { Length: > 0 } full ? full
+                    : "Устройство Logitech";
+
+                result.Add(new Device(
+                    id,
+                    (Str(device, "deviceType") ?? "").ToUpperInvariant(),
+                    name,
+                    Str(device, "deviceModel") is { Length: > 0 } model ? model : name,
+                    Str(device, "state") == "ACTIVE"));
             }
         }
 
-        return null;
+        return result;
     }
 
     // Parses a /battery/<id>/state reply; on failure returns null and a reason for the flyout.
