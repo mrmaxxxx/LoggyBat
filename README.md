@@ -1,103 +1,99 @@
 # LoggyBat
 
-<img src="docs/images/loggybat-logo.webp" width="160" alt="Логотип LoggyBat">
+<img src="docs/images/loggybat-logo.webp" width="160" alt="LoggyBat logo">
 
-**Виджет для WidBar, показывающий заряд устройств Logitech через G HUB.**
+**A widget for WidBar that shows the battery level of Logitech devices via G HUB.**
 
-LoggyBat — не отдельная панель и не замена WidBar. Это виджет: на панель задач
-Windows 11 его выводит приложение [WidBar](https://apps.microsoft.com/detail/9PKLDNM83TP9),
-а заряд устройств он получает из запущенного Logitech G HUB.
-Для работы нужны **WidBar** и **запущенный Logitech G HUB**.
+[Русская версия](README.ru.md)
 
-<img src="docs/images/widget-taskbar.png" width="420" alt="LoggyBat на панели WidBar: мышь 88%, наушники 69%, открыт flyout с временем ответа G HUB">
+LoggyBat is not a separate panel and not a replacement for WidBar. It is a widget: the
+[WidBar](https://apps.microsoft.com/detail/9PKLDNM83TP9) app puts it on the Windows 11 taskbar, and it
+gets the battery levels from a running Logitech G HUB. You need **WidBar** and a **running Logitech G HUB**.
 
-## Что нужно
+<img src="docs/images/widget-taskbar.png" width="420" alt="LoggyBat on the WidBar taskbar: mouse 88%, headset 69%, flyout open with the G HUB response time">
+
+## Requirements
 
 - Windows 11, x64
-- [WidBar](https://apps.microsoft.com/detail/9PKLDNM83TP9) — из Microsoft Store
-- [Logitech G HUB](https://www.logitechg.com/software/ghub) — запущенный, видит ваши устройства
+- [WidBar](https://apps.microsoft.com/detail/9PKLDNM83TP9) from Microsoft Store — **install it first**
+- [Logitech G HUB](https://www.logitechg.com/software/ghub) — running and seeing your devices
 
-## Первая установка
+## First installation
 
-1. Установите **WidBar** из Microsoft Store:
-   https://apps.microsoft.com/detail/9PKLDNM83TP9
-2. Установите **Logitech G HUB** с сайта Logitech:
-   https://www.logitechg.com/software/ghub
-   — и убедитесь, что G HUB видит ваши устройства.
-3. Скачайте **комплект первой установки** LoggyBat
-   (`LoggyBat-first-install-x64-<версия>`) из раздела Releases этого репозитория —
-   он появится с первым публичным релизом.
-4. Установите комплект по инструкции ниже.
-5. Добавьте виджет: **WidBar → Layout → Refresh → LoggyBat**.
+1. Install **WidBar** from Microsoft Store: https://apps.microsoft.com/detail/9PKLDNM83TP9
+   (it also installs the Microsoft Visual C++ framework packages LoggyBat needs).
+2. Install **Logitech G HUB**: https://www.logitechg.com/software/ghub — and make sure it sees your devices.
+3. Download the **first-install kit** (`LoggyBat-first-install-x64-<version>.zip`) from the
+   [Releases](https://github.com/mrmaxxxx/LoggyBat/releases) page and unpack it into a separate folder.
+   The terms of use (`TERMS.md`), the license (`LICENSE`) and the third-party licenses and notices
+   (`Notices\`) are in the kit — you can read them before installing.
+4. Right-click `Install-LoggyBat.ps1` → **Run with PowerShell**. The script:
+   1. shows the terms of use and asks you to type **YES** (or **ДА**). Any other answer stops the
+      installation; nothing on the computer is changed;
+   2. checks that the Microsoft Visual C++ framework packages (VCLibs) that come with WidBar are installed
+      for your account, in the version LoggyBat needs. If not, it stops: install or update WidBar from
+      Microsoft Store and run the script again;
+   3. starts Microsoft's installation script from the kit (`Install.ps1`), which installs the certificate,
+      the Windows App Runtime from the kit and LoggyBat.
+5. Add the widget: **WidBar → Layout → Refresh → LoggyBat**.
 
 > [!WARNING]
-> **Перед запуском установочного скрипта.** Пакет LoggyBat подписан
-> **самоподписанным сертификатом разработчика `CN=Max`**, а не через Microsoft Store.
-> Скрипт предложит добавить этот сертификат в доверенные сертификаты компьютера —
-> для этого нужны **права администратора**. Доверяйте сертификату, только если
-> доверяете источнику, из которого скачали LoggyBat.
+> **About the certificate.** LoggyBat is signed with the developer's **self-signed certificate `CN=Max`**,
+> not through Microsoft Store. During installation Microsoft's script offers to add this certificate to the
+> trusted certificates of the computer (Trusted People); this needs **administrator rights**. Trust the
+> certificate only if you trust the source you downloaded LoggyBat from.
 
-Установка комплекта (шаг 4):
+The first installation with this kit has **not yet been tested on a clean computer**.
 
-1. Распакуйте архив в отдельную папку.
-2. Нажмите правой кнопкой на `Install-LoggyBat.ps1` → **Выполнить с помощью PowerShell**.
-3. Скрипт сначала проверит компоненты Microsoft Visual C++ (VCLibs), которые устанавливаются
-   вместе с WidBar из Microsoft Store. Если их нет или они устарели, установка остановится —
-   установите или обновите WidBar из Microsoft Store и запустите скрипт снова.
-4. Когда скрипт предложит установить сертификат, подтвердите и разрешите запрос прав администратора.
-5. Скрипт установит Windows App Runtime из комплекта и сам LoggyBat.
+## Update
 
-Первая установка этим комплектом на компьютере, где LoggyBat ещё не было,
-**пока не проверена**.
+If LoggyBat is already installed, use the **update kit** (`LoggyBat-update-x64-<version>.zip`):
 
-## Обновление
+1. Unpack it into a separate folder.
+2. **Close WidBar completely** (tray icon → Exit): Windows cannot replace the files of a running widget.
+3. Right-click `Update-LoggyBat.ps1` → **Run with PowerShell**. If you have not accepted this version of
+   the terms before, it shows them and asks for **YES** / **ДА**; declining stops with no changes.
+   The script installs the new version over the old one (no uninstall) and starts WidBar again.
 
-Если LoggyBat уже установлен, шаги первой установки повторять не нужно —
-достаточно **комплекта обновления** (`LoggyBat-update-x64-<версия>`, только файл `.msix`).
+A standalone `.msix` is not offered as a separate installation method.
 
-1. Скачайте комплект обновления и распакуйте `.msix`.
-2. **Полностью закройте WidBar** (иначе Windows не сможет заменить файлы виджета).
-3. Установите пакет в PowerShell:
+## Compatibility
 
-   ```powershell
-   Add-AppxPackage -Path "<путь>\LoggyBat.Package_<версия>_x64.msix"
-   ```
-
-4. Запустите WidBar.
-
-Этот способ проверен: обновление ставится поверх установленной версии без удаления,
-виджет остаётся на прежнем месте панели. Установка двойным щелчком по `.msix`
-пока не проверялась.
-
-## Совместимость
-
-Проверенные устройства:
+Tested devices:
 
 - Logitech G502 X PLUS
 - Logitech PRO X WIRELESS
 
-Поддержка других моделей не проверена и не гарантируется.
-Устройства, у которых G HUB не показывает заряд, в LoggyBat не появятся.
+Support for other models is not tested and not guaranteed. Devices for which G HUB shows no battery level
+do not appear in LoggyBat.
 
-## Ограничения
+## Known limitations
 
-- Без запущенного G HUB вместо заряда показывается `—`, причина — во flyout.
-- Сразу после запуска виджета или устройства G HUB может несколько секунд
-  (до ~20 с) не отдавать заряд — в это время показывается `—`.
-- На панели — не больше двух устройств (мышь, гарнитура, клавиатура, остальные);
-  во flyout — все найденные.
-- Время во flyout — момент ответа G HUB, а не момент измерения заряда.
-- Процент берётся из G HUB как есть; однажды наблюдалось расхождение на 1 %
-  с окном G HUB, причина не выяснена.
+- Without a running G HUB the widget shows `—`; the flyout tells why.
+- Right after the widget or a device starts, G HUB may not report the charge for a few seconds
+  (up to ~20 s); `—` is shown meanwhile.
+- The taskbar shows at most two devices (mouse, headset, keyboard, others); the flyout shows all.
+- The time in the flyout is when G HUB answered, not when the battery was measured.
+- The percentage is taken from G HUB as is; a 1 % difference from the G HUB window was observed once,
+  cause unknown.
 
-Пока не проверено: первая установка на чистом компьютере, восстановление после
-перезапуска G HUB, после сна и после перезагрузки, отображение трёх и более устройств.
+Not tested yet: first installation on a clean computer, recovery after a G HUB restart, after sleep and
+after a reboot, three or more devices.
 
-## Для разработки
+## License and terms
 
-Устройство проекта, сборка, подпись, история проверок и откат —
-[docs/HANDOFF.md](docs/HANDOFF.md). Справка по WidBar SDK — [wiki/](wiki/Home.md).
+- LoggyBat's own code: [MIT License](LICENSE), Copyright (c) 2026 mrmaxxxx. The MIT License does not apply
+  to third-party components.
+- Third-party components keep their own licenses and notices: they are in the `Notices` folder of the
+  package and the kits; the template notice is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+- Terms of use: [TERMS.md](TERMS.md) (English primary, Russian translation).
 
-Проект создан на основе шаблона
-[andelby/widbar-widget-template](https://github.com/andelby/widbar-widget-template).
-Лицензия и авторство шаблона — в [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+## Contact
+
+Questions and problem reports: [GitHub Issues](https://github.com/mrmaxxxx/LoggyBat/issues).
+
+## Development
+
+Project structure, build, signing, test history and rollback: [docs/HANDOFF.md](docs/HANDOFF.md) (Russian).
+WidBar SDK reference: [wiki/](wiki/Home.md). The project is based on the
+[andelby/widbar-widget-template](https://github.com/andelby/widbar-widget-template) template.

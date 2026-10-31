@@ -294,6 +294,37 @@ G HUB работает:
 Перед выбором: решить вопрос с публичной подписью (самоподписанный `CN=Max` — временная схема)
 и с GitHub Releases. Ничего из этого не реализовано.
 
+## Подготовка первого релиза (31.10.2026)
+
+Решения правообладателя: собственный код — MIT, `Copyright (c) 2026 mrmaxxxx` (`LICENSE`; на сторонние
+компоненты не распространяется); документация и условия — английский (основной) и русский
+(`README.md` / `README.ru.md`, `TERMS.md`); контакт — GitHub Issues проекта (включает владелец
+в настройках GitHub); принятие условий — явное согласие в скрипте до изменений системы; отдельный
+MSIX как самостоятельный путь установки не предлагается. Обоснование условий — `docs/TERMS-RATIONALE.md`
+(юристом не проверено).
+
+**Комплекты** (`scripts/New-DownloadKits.ps1`), в обоих до установки доступны `TERMS.md`, `LICENSE`,
+`Notices\` (+ `THIRD_PARTY_NOTICES.md`) и `LoggyBat-Terms.ps1`:
+- `LoggyBat-update-x64-<версия>`: MSIX + `Update-LoggyBat.ps1`. Работает только поверх установленного
+  и более старого LoggyBat; требует закрытый WidBar; проверяет подпись; если эта версия условий ещё
+  не принята — показывает и требует «yes»/«да»; ставит `Add-AppxPackage` без удаления; запускает WidBar.
+- `LoggyBat-first-install-x64-<версия>`: MSIX + `LoggyBat.cer` + `Install-LoggyBat.ps1` + `Install.ps1`/
+  `Add-AppDevPackage.ps1` + `Dependencies\x64`,`x86` (только Windows App Runtime) + `Notices\kit\`.
+  Порядок: условия → проверка VCLibs (от WidBar из Store) → запись согласия → `Install.ps1`.
+- Отказ (любой ответ, кроме «yes»/«да») — выход с кодом 2 без изменений.
+- Запись согласия: `HKCU:\Software\LoggyBat` (`TermsVersion`, `TermsSha256`, `AcceptedUtc`).
+
+**Уведомления**: область `app` (внутри MSIX) = пакеты с файлами `runtime`/`native` для `win-x64` + runtime-
+паки фреймворков из `frameworkReferences`; область `kit` (только в комплекте первой установки) — прочие
+пакеты Windows App SDK (Runtime, Base, DWrite), т. к. комплект содержит Windows App Runtime. Только
+скачиваемые SDK runtime-паки без ссылки на фреймворк (ASP.NET Core, WindowsDesktop) не собираются.
+`Test-Notices.ps1`: app = `deps.json` в обе стороны, все тексты по SHA256, обязательные файлы пакетов,
+`LICENSE`, `TERMS.md`, `THIRD_PARTY_NOTICES.md` побайтно равны git HEAD и checkout (для них `eol=lf`).
+
+Локально проверено (на имитациях): 15 тестов скриптов, в т. ч. отказ от условий без изменений системы
+(версия LoggyBat, сертификаты «Доверенные лица», `HKCU:\Software\LoggyBat`, число пакетов — без изменений).
+Первая установка на чистой системе не проверена.
+
 ## План оформления проекта
 
 Каждый этап — с отдельного разрешения.
