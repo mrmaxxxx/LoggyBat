@@ -57,7 +57,8 @@ jobs:
         run: |
           ./scripts/Collect-Notices.ps1 `
             -Assets (Join-Path $env:GITHUB_WORKSPACE 'src\LoggyBat\obj\project.assets.json') `
-            -Out (Join-Path $env:GITHUB_WORKSPACE 'src\LoggyBat.Package\Notices')
+            -OutApp (Join-Path $env:GITHUB_WORKSPACE 'src\LoggyBat.Package\Notices') `
+            -OutKit (Join-Path $env:RUNNER_TEMP 'kit-notices')
 
       - name: Build package
         shell: pwsh
@@ -178,9 +179,8 @@ jobs:
           ./scripts/New-DownloadKits.ps1 `
             -AppPackages (Join-Path $env:GITHUB_WORKSPACE 'AppPackages') `
             -Out (Join-Path $env:GITHUB_WORKSPACE 'kits') `
-            -NoticeSources @(
-              (Join-Path $env:GITHUB_WORKSPACE 'src\LoggyBat.Package\Notices'),
-              (Join-Path $env:GITHUB_WORKSPACE 'THIRD_PARTY_NOTICES.md'))
+            -AppNotices (Join-Path $env:GITHUB_WORKSPACE 'src\LoggyBat.Package\Notices') `
+            -KitNotices (Join-Path $env:RUNNER_TEMP 'kit-notices')
 
       - name: Upload update kit
         uses: actions/upload-artifact@v4

@@ -57,6 +57,12 @@
     <Content Include="..\..\THIRD_PARTY_NOTICES.md">
       <Link>Notices\THIRD_PARTY_NOTICES.md</Link>
     </Content>
+    <Content Include="..\..\LICENSE">
+      <Link>Notices\LoggyBat\LICENSE</Link>
+    </Content>
+    <Content Include="..\..\TERMS.md">
+      <Link>Notices\LoggyBat\TERMS.md</Link>
+    </Content>
     <Content Include="Notices\**\*" />
   </ItemGroup>
   <ItemGroup>

@@ -1,24 +1,33 @@
 ﻿# LoggyBat - first installation. Run from the unpacked first-install kit:
 #   right-click Install-LoggyBat.ps1 > Run with PowerShell
-#   or: powershell -ExecutionPolicy Bypass -File .\Install-LoggyBat.ps1 [-CheckOnly]
-# 1. Checks, for the current user, the VCLibs framework packages that the LoggyBat manifest requires
+#   or: powershell -ExecutionPolicy Bypass -File .\Install-LoggyBat.ps1 [-CheckOnly] [-AcceptTerms]
+# 1. Shows TERMS.md and asks for explicit consent (-AcceptTerms = consent given in advance).
+#    Declining stops here; nothing is changed.
+# 2. Checks, for the current user, the VCLibs framework packages that the LoggyBat manifest requires
 #    (name, publisher, architecture, minimum version - all read from the manifest, nothing lowered).
 #    They are not in this kit: they come with WidBar from Microsoft Store, which must be installed first.
-# 2. Only if they are present, runs Microsoft's Install.ps1 from this folder (certificate, Windows App
-#    Runtime from Dependencies\, LoggyBat). -CheckOnly stops after step 1.
-# Nothing is downloaded by this script.
+# 3. Only then records the acceptance (HKCU:\Software\LoggyBat) and runs Microsoft's Install.ps1 from this
+#    folder (certificate, Windows App Runtime from Dependencies\, LoggyBat).
+# -CheckOnly runs step 2 only and changes nothing. Nothing is downloaded by this script.
 param(
     [switch]$CheckOnly,
+    [switch]$AcceptTerms,
     [string]$Package   # the LoggyBat .msix; default: the only .msix next to this script
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'LoggyBat-Terms.ps1')
 $widBarStore = 'https://apps.microsoft.com/detail/9PKLDNM83TP9'
 
 if (-not $Package) {
     $found = @(Get-ChildItem $PSScriptRoot -File -Filter *.msix)
     if ($found.Count -ne 1) { throw "Expected exactly one .msix next to Install-LoggyBat.ps1, found $($found.Count)." }
     $Package = $found[0].FullName
+}
+
+if (-not $CheckOnly) {
+    $terms = Get-TermsInfo $PSScriptRoot
+    if (-not $AcceptTerms -and -not (Request-TermsConsent $terms)) { Write-Declined; exit 2 }
 }
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -60,4 +69,5 @@ if ($problems) {
 }
 
 if ($CheckOnly) { 'Prerequisites OK / Проверка пройдена'; return }
+Save-TermsAcceptance $terms
 & (Join-Path $PSScriptRoot 'Install.ps1')

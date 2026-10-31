@@ -1,9 +1,12 @@
 # Copies license and third-party notice files, unchanged, from the NuGet packages that NuGet actually
-# resolved for LoggyBat (project.assets.json), into Out\<package id>\<version>\, and writes
-# Out\INDEX.txt (for people) and Out\notices.json (for scripts\Test-Notices.ps1).
-# Which packages: every package with runtime/native files for the target RID (they end up in the MSIX),
-# every Microsoft.WindowsAppSDK* package (their MSIX/notices go into the first-install kit) and the
-# runtime packs (.NET runtime, Windows SDK projection) from the project's download dependencies.
+# resolved for LoggyBat (project.assets.json). Runs before the MSIX exists, so the selection is made from
+# the same data deps.json is later generated from. Two scopes, each with its own INDEX.txt and notices.json:
+#   app (-OutApp) - goes INTO the MSIX: packages with runtime/native files for the RID (what deps.json lists)
+#                   and the runtime packs of the frameworks the project references (frameworkReferences);
+#   kit (-OutKit) - goes into the first-install kit only: the other Microsoft.WindowsAppSDK* packages; the
+#                   kit ships the Windows App Runtime packages built from them (Microsoft.WindowsAppSDK.Runtime).
+# Runtime packs the .NET SDK merely downloads (e.g. ASP.NET Core, WindowsDesktop) without a framework
+# reference are not shipped anywhere; they are logged as ignored, not collected.
 # Status of each package:
 #   copied        - the package's own license/notice files, byte for byte;
 #   official-text - no file in the package; licenses\<id>\source.json names the official text, stored
@@ -12,7 +15,8 @@
 #   unresolved    - none of the above; listed as an open exception, never as done.
 param(
     [Parameter(Mandatory)][string]$Assets,
-    [Parameter(Mandatory)][string]$Out,
+    [Parameter(Mandatory)][string]$OutApp,
+    [Parameter(Mandatory)][string]$OutKit,
     [string]$Rid = 'win-x64',
     [string]$OfficialTexts = (Join-Path $PSScriptRoot '..\licenses')
 )
@@ -25,28 +29,31 @@ $root = @($assetsJson.packageFolders.PSObject.Properties.Name)[0]
 $target = @($assetsJson.targets.PSObject.Properties | Where-Object Name -like "*/$Rid")[0]
 if (-not $target) { throw "No $Rid target in $Assets." }
 
-$wanted = [ordered]@{}
+$scope = [ordered]@{}
 foreach ($lib in $target.Value.PSObject.Properties) {
     if ($lib.Value.type -ne 'package') { continue }
-    $shipsFiles = $lib.Value.runtime -or $lib.Value.native -or $lib.Value.runtimeTargets
-    if ($shipsFiles -or $lib.Name -like 'Microsoft.WindowsAppSDK*') { $wanted[$lib.Name] = $true }
+    if ($lib.Value.runtime -or $lib.Value.native -or $lib.Value.runtimeTargets) { $scope[$lib.Name] = 'app' }
+    elseif ($lib.Name -like 'Microsoft.WindowsAppSDK*') { $scope[$lib.Name] = 'kit' }
 }
 foreach ($fw in $assetsJson.project.frameworks.PSObject.Properties) {
+    $refs = @($fw.Value.frameworkReferences.PSObject.Properties.Name)
+    "frameworkReferences ($($fw.Name)): $($refs -join ', ')"
     foreach ($dd in @($fw.Value.downloadDependencies)) {
-        if ($dd.name -match "\.Runtime\.$Rid`$|^Microsoft\.Windows\.SDK\.NET\.Ref`$") {
-            $wanted["$($dd.name)/$($dd.version.Trim('[]').Split(',')[0].Trim())"] = $true
-        }
+        $key = "$($dd.name)/$($dd.version.Trim('[]').Split(',')[0].Trim())"
+        $referenced = $refs | Where-Object { $dd.name -eq $_ -or $dd.name -eq "$_.Runtime.$Rid" }
+        if ($referenced) { $scope[$key] = 'app' } else { "ignored download dependency (not referenced, not shipped): $key" }
     }
 }
 
 function Sha256([string]$path) { (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant() }
 
 $entries = @()
-foreach ($key in $wanted.Keys) {
+foreach ($key in $scope.Keys) {
     $id, $version = $key.Split('/')
+    $out = if ($scope[$key] -eq 'app') { $OutApp } else { $OutKit }
     $dir = Join-Path $root (Join-Path $id.ToLowerInvariant() $version)
     if (-not (Test-Path $dir)) { throw "Package folder not found: $dir" }
-    $dest = Join-Path $Out (Join-Path $id $version)
+    $dest = Join-Path $out (Join-Path $id $version)
 
     $nuspecFile = Get-ChildItem $dir -Filter *.nuspec | Select-Object -First 1
     $meta = if ($nuspecFile) { ([xml](Get-Content $nuspecFile.FullName -Raw)).package.metadata } else { $null }
@@ -55,7 +62,7 @@ foreach ($key in $wanted.Keys) {
     $licenseUrl = "$($meta.licenseUrl)"
     $license = if ($licenseType) { "${licenseType}: $licenseText" } elseif ($licenseUrl) { "url: $licenseUrl" } else { 'not stated' }
 
-    $entry = [ordered]@{ id = $id; version = $version; license = $license; status = ''; note = ''; files = @() }
+    $entry = [ordered]@{ id = $id; version = $version; scope = $scope[$key]; license = $license; status = ''; note = ''; files = @() }
     $files = @(Get-ChildItem $dir -File | Where-Object { $_.Name -match $noticeName })
     $official = Join-Path $OfficialTexts (Join-Path $id 'source.json')
 
@@ -116,18 +123,26 @@ SOFTWARE.
     $entries += $entry
 }
 
-New-Item -ItemType Directory -Force $Out | Out-Null
-ConvertTo-Json @($entries) -Depth 5 | Set-Content -Path (Join-Path $Out 'notices.json') -Encoding utf8
-
-$index = @(
-    'Third-party license and notice files for LoggyBat, from the NuGet packages resolved for this build.'
-    'Folder layout: <package id>\<version>\<file>. Status: copied = the package''s own files, unchanged;'
-    'official-text = no file in the package, official text named by its nuspec (see source.json);'
-    'composed = no file, standard MIT text composed from the nuspec; unresolved = open, needs review.'
-    ''
-)
-$index += $entries | ForEach-Object {
-    "$($_.id) $($_.version)  [$($_.license)]  $($_.status): $(($_.files | ForEach-Object name) -join ', ')$(if ($_.note) { "  ($($_.note))" })"
+$headers = @{
+    app = 'Third-party components INSIDE the LoggyBat package (MSIX), from the NuGet packages resolved for this build.'
+    kit = 'Third-party packages shipped NEXT TO the MSIX in the first-install kit (Windows App Runtime), from the NuGet packages resolved for this build.'
 }
-Set-Content -Path (Join-Path $Out 'INDEX.txt') -Value $index -Encoding utf8
-$index
+foreach ($s in 'app', 'kit') {
+    $out = if ($s -eq 'app') { $OutApp } else { $OutKit }
+    $mine = @($entries | Where-Object { $_.scope -eq $s })
+    New-Item -ItemType Directory -Force $out | Out-Null
+    ConvertTo-Json @($mine) -Depth 5 | Set-Content -Path (Join-Path $out 'notices.json') -Encoding utf8
+    $index = @(
+        $headers[$s]
+        'Folder layout: <package id>\<version>\<file>. Status: copied = the package''s own files, unchanged;'
+        'official-text = no file in the package, official text named by its nuspec (see source.json);'
+        'composed = no file, standard MIT text composed from the nuspec; unresolved = open, needs review.'
+        ''
+    )
+    $index += $mine | ForEach-Object {
+        "$($_.id) $($_.version)  [$($_.license)]  $($_.status): $(($_.files | ForEach-Object name) -join ', ')$(if ($_.note) { "  ($($_.note))" })"
+    }
+    Set-Content -Path (Join-Path $out 'INDEX.txt') -Value $index -Encoding utf8
+    "--- $s"
+    $index | Select-Object -Skip 5
+}
