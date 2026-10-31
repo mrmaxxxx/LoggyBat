@@ -1,7 +1,8 @@
 # Copies license and third-party notice files, unchanged, from the NuGet packages that NuGet actually
 # resolved for LoggyBat (project.assets.json). Runs before the MSIX exists, so the selection is made from
 # the same data deps.json is later generated from. Two scopes, each with its own INDEX.txt and notices.json:
-#   app (-OutApp) - goes INTO the MSIX: packages with runtime/native files for the RID (what deps.json lists)
+#   app (-OutApp) - goes INTO the MSIX: packages with runtime/native files for the RID, or depending on such a package
+#                   (what deps.json lists)
 #                   and the runtime packs of the frameworks the project references (frameworkReferences);
 #   kit (-OutKit) - goes into the first-install kit only: the other Microsoft.WindowsAppSDK* packages; the
 #                   kit ships the Windows App Runtime packages built from them (Microsoft.WindowsAppSDK.Runtime).
@@ -32,10 +33,23 @@ $root = @($assetsJson.packageFolders.PSObject.Properties.Name)[0]
 $target = @($assetsJson.targets.PSObject.Properties | Where-Object Name -like "*/$Rid")[0]
 if (-not $target) { throw "No $Rid target in $Assets." }
 
+# deps.json keeps a package if it has runtime files or depends (transitively) on one that does; packages that
+# are empty all the way down are trimmed from it. Same rule here, repeated until nothing changes.
+$libs = @($target.Value.PSObject.Properties | Where-Object { $_.Value.type -eq 'package' })
+$shipped = @{}
+do {
+    $added = $false
+    foreach ($lib in $libs) {
+        if ($shipped[$lib.Name]) { continue }
+        $deps = @($lib.Value.dependencies.PSObject.Properties.Name)
+        $hit = $lib.Value.runtime -or $lib.Value.native -or $lib.Value.runtimeTargets -or $lib.Value.resource -or
+               @($libs | Where-Object { $shipped[$_.Name] -and $_.Name.Split('/')[0] -in $deps }).Count
+        if ($hit) { $shipped[$lib.Name] = $true; $added = $true }
+    }
+} while ($added)
 $scope = [ordered]@{}
-foreach ($lib in $target.Value.PSObject.Properties) {
-    if ($lib.Value.type -ne 'package') { continue }
-    if ($lib.Value.runtime -or $lib.Value.native -or $lib.Value.runtimeTargets) { $scope[$lib.Name] = 'app' }
+foreach ($lib in $libs) {
+    if ($shipped[$lib.Name]) { $scope[$lib.Name] = 'app' }
     elseif ($lib.Name -like 'Microsoft.WindowsAppSDK*') { $scope[$lib.Name] = 'kit' }
 }
 foreach ($fw in $assetsJson.project.frameworks.PSObject.Properties) {
