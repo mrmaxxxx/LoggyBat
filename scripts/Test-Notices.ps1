@@ -95,6 +95,9 @@ foreach ($n in $notices | Where-Object status -ne 'copied') {
         "::$level title=License exception::$line"
     }
 }
-if ($errors.Count) { throw "Notices check failed:`n  $($errors -join "`n  ")" }
+if ($errors.Count) {
+    if ($env:GITHUB_ACTIONS) { $errors | ForEach-Object { "::error title=Notices check::$_" } }
+    throw "Notices check failed:`n  $($errors -join "`n  ")"
+}
 "Notices check passed; LICENSE, TERMS.md and THIRD_PARTY_NOTICES.md inside the MSIX equal git HEAD and the checkout."
 if ($env:GITHUB_ACTIONS) { "::notice title=Notices::app scope = deps.json ($($shipped.Count) libraries), all texts inside the MSIX with matching SHA256; own texts equal git HEAD" }

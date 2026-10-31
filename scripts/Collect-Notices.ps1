@@ -18,6 +18,9 @@ param(
     [Parameter(Mandatory)][string]$OutApp,
     [Parameter(Mandatory)][string]$OutKit,
     [string]$Rid = 'win-x64',
+    # Framework references the .NET SDK adds implicitly at build time (so project.assets.json does not list
+    # them under frameworkReferences): the Windows SDK projection for net*-windows10.0.x target frameworks.
+    [string[]]$ImplicitFrameworks = @('Microsoft.Windows.SDK.NET.Ref'),
     [string]$OfficialTexts = (Join-Path $PSScriptRoot '..\licenses')
 )
 
@@ -36,12 +39,15 @@ foreach ($lib in $target.Value.PSObject.Properties) {
     elseif ($lib.Name -like 'Microsoft.WindowsAppSDK*') { $scope[$lib.Name] = 'kit' }
 }
 foreach ($fw in $assetsJson.project.frameworks.PSObject.Properties) {
-    $refs = @($fw.Value.frameworkReferences.PSObject.Properties.Name)
-    "frameworkReferences ($($fw.Name)): $($refs -join ', ')"
+    $refs = @($fw.Value.frameworkReferences.PSObject.Properties.Name) + $ImplicitFrameworks
+    $text = "frameworks ($($fw.Name)): $($refs -join ', ') (implicit: $($ImplicitFrameworks -join ', '))"
+    $text; if ($env:GITHUB_ACTIONS) { "::notice title=Notices selection::$text" }
     foreach ($dd in @($fw.Value.downloadDependencies)) {
         $key = "$($dd.name)/$($dd.version.Trim('[]').Split(',')[0].Trim())"
         $referenced = $refs | Where-Object { $dd.name -eq $_ -or $dd.name -eq "$_.Runtime.$Rid" }
-        if ($referenced) { $scope[$key] = 'app' } else { "ignored download dependency (not referenced, not shipped): $key" }
+        if ($referenced) { $scope[$key] = 'app'; continue }
+        $text = "ignored download dependency (not referenced, not shipped): $key"
+        $text; if ($env:GITHUB_ACTIONS) { "::notice title=Notices selection::$text" }
     }
 }
 
