@@ -9,12 +9,16 @@ namespace LoggyBat;
 
 public sealed class MainPlugin :
     WidgetPluginBase,
-    IWidgetFlyoutLifecycle
+    IWidgetFlyoutLifecycle,
+    IConfigurableWidgetPlugin
 {
     private readonly GHubClient _ghub = new();
     private DispatcherQueue? _ui;
     private StackPanel? _preview;
     private StackPanel? _flyoutList;
+
+    // What the widget shows: the saved settings, or the draft while the settings window is open.
+    private WidgetSettings _settings = WidgetSettings.Default;
 
     private bool _flyoutVisible;
     private bool _disposed;
@@ -22,7 +26,8 @@ public sealed class MainPlugin :
     public override string Id => "com.mrmaxxxx.loggybat";
     public override string Name => "LoggyBat";
 
-    public override int PreviewLogicalWidth => 190;
+    // 190 for two devices, as before; WidBar re-reads it after every settings change.
+    public override int PreviewLogicalWidth => 20 + 85 * _settings.Count;
     public override int FlyoutWidth => 360;
     public override int FlyoutHeight => 220;
     public override WidgetFlyoutBackdrop FlyoutBackdrop =>
@@ -30,6 +35,7 @@ public sealed class MainPlugin :
 
     public override async Task InitializeAsync(IWidgetContext context)
     {
+        _settings = WidgetSettings.Parse(context.SettingsJson);
         await base.InitializeAsync(context);
         context.PreviewVisibilityChanged += OnPreviewVisibilityChanged;
         _ghub.Changed += OnGHubChanged;
@@ -107,7 +113,7 @@ public sealed class MainPlugin :
             return;
 
         _preview.Children.Clear();
-        foreach (var (type, percent) in DeviceList.PreviewItems(_ghub.Devices, DateTimeOffset.Now))
+        foreach (var (type, percent) in DeviceList.PreviewItems(_ghub.Devices, _settings, DateTimeOffset.Now))
         {
             var icon = IconBlock(type);
             icon.Margin = new Thickness(_preview.Children.Count > 0 ? 14 : 0, 0, 5, 0);
@@ -134,7 +140,7 @@ public sealed class MainPlugin :
             return;
         }
 
-        foreach (var (type, line, detail) in DeviceList.FlyoutRows(_ghub.Devices, DateTimeOffset.Now))
+        foreach (var (type, line, detail) in DeviceList.FlyoutRows(_ghub.Devices, DateTimeOffset.Now, _settings.Devices))
         {
             // Grid, not a horizontal StackPanel: a long name must wrap inside the flyout width.
             var head = new Grid { ColumnSpacing = 6 };
@@ -150,6 +156,18 @@ public sealed class MainPlugin :
             entry.Children.Add(new TextBlock { Text = detail, FontSize = 16, TextWrapping = TextWrapping.Wrap });
             _flyoutList.Children.Add(entry);
         }
+    }
+
+    public UIElement? CreateSettingsContent(IWidgetSettingsContext ctx) =>
+        SettingsView.Create(ctx, _ghub.Devices);
+
+    // Every edit in the settings window, and the original JSON again on Cancel: only the look
+    // changes here, nothing is saved or started.
+    public override void OnSettingsDraftChanged(string json)
+    {
+        _settings = WidgetSettings.Parse(json);
+        UpdateText();
+        Context?.RequestPreviewRefresh();
     }
 
     // Comes from the G HUB loop thread; XAML may only be touched on the UI thread.

@@ -82,14 +82,30 @@ public static class DeviceList
     public static DeviceReading WithProblem(DeviceReading row, string problem) =>
         row with { Percent = null, Charging = false, Problem = problem };
 
-    // Fixed order that never depends on charge: type priority, then name, then dev-id.
-    public static IReadOnlyList<(DeviceReading Row, string Label)> ForDisplay(IReadOnlyList<DeviceReading> rows)
+    public const string NotFoundProblem = "сейчас нет в G HUB";
+
+    // Order that never depends on charge: the models the user picked, in the picked order, then the
+    // rest by type priority, name and dev-id. A picked model missing from G HUB stays as a "—" row,
+    // so it keeps its place and no other device moves into it. Units of one model stay separate rows.
+    public static IReadOnlyList<(DeviceReading Row, string Label)> ForDisplay(
+        IReadOnlyList<DeviceReading> rows, IReadOnlyList<ChosenDevice>? chosen = null)
     {
-        var ordered = rows
+        chosen ??= [];
+        var auto = rows
             .OrderBy(r => Priority(r.Type))
             .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.Id, StringComparer.Ordinal)
             .ToList();
+
+        var ordered = new List<DeviceReading>();
+        foreach (var c in chosen)
+        {
+            var units = auto.Where(r => r.Model == c.Model).ToList();
+            ordered.AddRange(units.Count > 0
+                ? units
+                : [new DeviceReading("", c.Type, c.Name, c.Model, null, false, null, NotFoundProblem, null)]);
+        }
+        ordered.AddRange(auto.Where(r => chosen.All(c => c.Model != r.Model)));
 
         return ordered
             .Select(r =>
@@ -137,19 +153,29 @@ public static class DeviceList
             ? r.Percent + "%" + (r.Charging ? " ⚡" : "")
             : "—";
 
-    // Taskbar: at most two devices; a single "🔋 —" while none is known.
-    public static IReadOnlyList<(string Type, string Percent)> PreviewItems(IReadOnlyList<DeviceReading> rows, DateTimeOffset now)
+    // Taskbar: settings.Count devices, automatic or only the picked models; a single "🔋 —" while
+    // there is nothing to show.
+    public static IReadOnlyList<(string Type, string Percent)> PreviewItems(
+        IReadOnlyList<DeviceReading> rows, WidgetSettings settings, DateTimeOffset now)
     {
-        var shown = ForDisplay(rows)
-            .Take(2)
+        var picked = settings.Devices;
+        var shown = ForDisplay(rows, picked)
+            .Where(x => picked.Count == 0 || picked.Any(c => c.Model == x.Row.Model))
+            .Take(settings.Count)
             .Select(x => (x.Row.Type, Percentage(x.Row, now)))
             .ToList();
 
         return shown.Count > 0 ? shown : [("", "—")];
     }
 
+    public static IReadOnlyList<(string Type, string Percent)> PreviewItems(IReadOnlyList<DeviceReading> rows, DateTimeOffset now) =>
+        PreviewItems(rows, WidgetSettings.Default, now);
+
+    public static string PreviewText(IReadOnlyList<DeviceReading> rows, WidgetSettings settings, DateTimeOffset now) =>
+        string.Join("   ", PreviewItems(rows, settings, now).Select(x => $"{Icon(x.Type)} {x.Percent}"));
+
     public static string PreviewText(IReadOnlyList<DeviceReading> rows, DateTimeOffset now) =>
-        string.Join("   ", PreviewItems(rows, now).Select(x => $"{Icon(x.Type)} {x.Percent}"));
+        PreviewText(rows, WidgetSettings.Default, now);
 
     // clientProblem: why the whole connection has no data, null when G HUB answers.
     // Returns the one-line state of the whole connection when there are no rows, otherwise null.
@@ -163,8 +189,9 @@ public static class DeviceList
         };
 
     // One entry per device: "G502 X PLUS: 92%" and the detail line under it.
-    public static IReadOnlyList<(string Type, string Line, string Detail)> FlyoutRows(IReadOnlyList<DeviceReading> rows, DateTimeOffset now) =>
-        ForDisplay(rows)
+    public static IReadOnlyList<(string Type, string Line, string Detail)> FlyoutRows(
+        IReadOnlyList<DeviceReading> rows, DateTimeOffset now, IReadOnlyList<ChosenDevice>? chosen = null) =>
+        ForDisplay(rows, chosen)
             .Select(x => (x.Row.Type, $"{x.Label}: {Percentage(x.Row, now)}", Status(x.Row, now)))
             .ToList();
 

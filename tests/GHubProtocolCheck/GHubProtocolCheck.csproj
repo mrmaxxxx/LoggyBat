@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- Plain console check of the widget's G HUB parsing, run in CI before packaging.
-       It compiles the widget's GHubProtocol.cs and DeviceList.cs directly, so no WinUI is needed. -->
+       It compiles the widget's pure files (no WinUI, no I/O) directly. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
@@ -12,6 +12,7 @@
   <ItemGroup>
     <Compile Include="..\..\src\LoggyBat\GHubProtocol.cs" Link="GHubProtocol.cs" />
     <Compile Include="..\..\src\LoggyBat\DeviceList.cs" Link="DeviceList.cs" />
+    <Compile Include="..\..\src\LoggyBat\Settings.cs" Link="Settings.cs" />
   </ItemGroup>
 
 </Project>

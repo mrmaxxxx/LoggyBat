@@ -34,7 +34,7 @@
     <WidBarPluginCategory>Utility</WidBarPluginCategory>
     <WidBarPluginVersion>1.0.0</WidBarPluginVersion>
     <WidBarPluginPreviewWidth>190</WidBarPluginPreviewWidth>
-    <WidBarPluginConfigurable>false</WidBarPluginConfigurable>
+    <WidBarPluginConfigurable>true</WidBarPluginConfigurable>
     <Copyright>Copyright (c) 2026 mrmaxxxx</Copyright>
   </PropertyGroup>
 
