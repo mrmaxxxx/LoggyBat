@@ -189,8 +189,8 @@ internal sealed class SettingsView
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.Children.Add(check);
-            AddMoveButton(row, 1, "", "Выше", index > 0, () => Move(index, -1));
-            AddMoveButton(row, 2, "", "Ниже", index < _entries.Count - 1, () => Move(index, +1));
+            AddMoveButton(row, 1, "\uE70E", "Выше", index > 0, () => Move(index, -1));
+            AddMoveButton(row, 2, "\uE70D", "Ниже", index < _entries.Count - 1, () => Move(index, +1));
             _deviceRows.Children.Add(row);
         }
     }

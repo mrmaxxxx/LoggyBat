@@ -131,7 +131,7 @@ public static class DeviceList
 
     // What the UI draws: U+FE0F asks for the colour emoji. 🖱 and ⌨ default to the narrow text form,
     // and drawing the wide emoji into that narrow box is the likely cause of the clipped mouse.
-    public static string Glyph(string type) => Icon(type) + "️";
+    public static string Glyph(string type) => Icon(type) + "\uFE0F";
 
     private static int Priority(string type) => type switch
     {

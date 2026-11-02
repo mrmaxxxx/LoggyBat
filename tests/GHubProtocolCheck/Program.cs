@@ -80,7 +80,7 @@ Check(DeviceList.FlyoutText(four, null, now).Contains("⌨ G915: 92%") && Device
 
 // --- Icons ---
 Check(DeviceList.Icon("MICROPHONE") == "🎤" && DeviceList.Icon("SOMETHING_NEW") == "🔋" && DeviceList.Icon("") == "🔋", "microphone 🎤, unknown type 🔋");
-Check(DeviceList.Glyph("MOUSE") == "🖱️" && DeviceList.Glyph("HEADSET") == "🎧️", "UI glyph asks for the emoji form (U+FE0F)");
+Check(DeviceList.Glyph("MOUSE") == "🖱\uFE0F" && DeviceList.Glyph("HEADSET") == "🎧\uFE0F", "UI glyph asks for the emoji form (U+FE0F)");
 Check(DeviceList.PreviewItems([], now).SequenceEqual([("", "—")]), "no devices: one neutral item");
 var mic = Poll([], [Other("dev0"), new Dev("dev1", "MICROPHONE", "Mic", "mic", "ACTIVE")], true, now, Charge92);
 Check(DeviceList.ForDisplay(mic).Select(x => x.Row.Type).SequenceEqual(["MICROPHONE", "SPEAKER"]), "microphone sorts before unknown types");

@@ -102,7 +102,8 @@ public static class Updates
     // only a successful "no updates" answer clears it.
     public static UpdateResult? Found { get; private set; }
 
-    private sealed record Stored(UpdateResult? Last, UpdateResult? Found);
+    // internal, not private: the JSON serializer builds it by reflection.
+    internal sealed record Stored(UpdateResult? Last, UpdateResult? Found);
 
     // Raised on a background thread after every check.
     public static event Action? Changed;
