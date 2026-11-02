@@ -22,9 +22,12 @@ internal sealed class SettingsView
     private readonly StackPanel _deviceRows = new() { Spacing = 4 };
     private WidgetSettings _settings;
 
-    private SettingsView(IWidgetSettingsContext ctx, IReadOnlyList<DeviceReading> current)
+    private readonly Version? _installed;
+
+    private SettingsView(IWidgetSettingsContext ctx, IReadOnlyList<DeviceReading> current, Version? installed)
     {
         _ctx = ctx;
+        _installed = installed;
         _originalJson = ctx.SettingsJson;
         _settings = WidgetSettings.Parse(_originalJson);
 
@@ -38,8 +41,8 @@ internal sealed class SettingsView
         }
     }
 
-    public static UIElement Create(IWidgetSettingsContext ctx, IReadOnlyList<DeviceReading> current) =>
-        new SettingsView(ctx, current).Build();
+    public static UIElement Create(IWidgetSettingsContext ctx, IReadOnlyList<DeviceReading> current, Version? installed) =>
+        new SettingsView(ctx, current, installed).Build();
 
     private UIElement Build()
     {
@@ -78,6 +81,18 @@ internal sealed class SettingsView
         diagnostics.Toggled += (_, _) => Save(_settings with { Diagnostics = diagnostics.IsOn });
         panel.Children.Add(diagnostics);
 
+        panel.Children.Add(Header("Обновления"));
+        panel.Children.Add(Text(_installed is { } v ? $"Установлена версия {v}" : "Версия неизвестна: LoggyBat запущен не из пакета"));
+        var auto = new ToggleSwitch { Header = "Проверять обновления автоматически", IsOn = _settings.AutoUpdateCheck };
+        auto.Toggled += (_, _) => Save(_settings with { AutoUpdateCheck = auto.IsOn });
+        panel.Children.Add(auto);
+        panel.Children.Add(Note(
+            "Не чаще раза в сутки (при запуске — если сутки уже прошли) LoggyBat запрашивает у GitHub (api.github.com) сведения о " +
+            "последнем опубликованном релизе. GitHub получает обычные данные запроса: IP-адрес компьютера и " +
+            "версию LoggyBat; сведения об устройствах не передаются. Ничего не скачивается и не " +
+            "устанавливается. Выключатель начинает действовать после «Сохранить»; кнопка ниже работает " +
+            "в любом случае."));
+
         var root = new StackPanel { Spacing = 16 };
         if (_settings.FromNewerVersion)
         {
@@ -93,9 +108,44 @@ internal sealed class SettingsView
             IsEnabled = !_settings.FromNewerVersion,
             HorizontalContentAlignment = HorizontalAlignment.Stretch
         });
+        root.Children.Add(CheckNowRow());
 
         return new ScrollViewer { Content = root, Padding = new Thickness(0, 0, 12, 0) };
     }
+
+    // Outside the settings themselves: it saves nothing, so it works even for settings of a newer
+    // version, and its result is always shown (also errors, whatever the diagnostics switch says).
+    private UIElement CheckNowRow()
+    {
+        var result = Text(Updates.Last is { } last ? Describe(last) : "Ещё не проверялось");
+        var button = new Button { Content = "Проверить сейчас", IsEnabled = _installed is not null };
+        button.Click += async (_, _) =>
+        {
+            if (_installed is not { } installed)
+                return;
+
+            button.IsEnabled = false;
+            result.Text = "Проверка…";
+            try
+            {
+                result.Text = Describe(await Updates.CheckNowAsync(installed));
+            }
+            catch (Exception e)
+            {
+                result.Text = $"Не удалось проверить: {e.Message}";
+            }
+            button.IsEnabled = true;
+        };
+
+        var row = new StackPanel { Spacing = 8 };
+        row.Children.Add(button);
+        row.Children.Add(result);
+        return row;
+    }
+
+    private static string Describe(UpdateResult r) =>
+        $"{r.Text}. Проверено {r.At.ToLocalTime():dd.MM.yyyy HH:mm}." +
+        (r.Status == UpdateStatus.Available ? " Ссылка на релиз — в окне виджета." : "");
 
     private void FillDeviceRows()
     {

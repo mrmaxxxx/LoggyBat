@@ -13,6 +13,8 @@
     <Compile Include="..\..\src\LoggyBat\GHubProtocol.cs" Link="GHubProtocol.cs" />
     <Compile Include="..\..\src\LoggyBat\DeviceList.cs" Link="DeviceList.cs" />
     <Compile Include="..\..\src\LoggyBat\Settings.cs" Link="Settings.cs" />
+    <Compile Include="..\..\src\LoggyBat\UpdateCheck.cs" Link="UpdateCheck.cs" />
+    <Compile Include="..\..\src\LoggyBat\Log.cs" Link="Log.cs" />
   </ItemGroup>
 
 </Project>

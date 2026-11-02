@@ -176,4 +176,21 @@ Check(DeviceList.FlyoutText(mine, null, now, null, diagnostics: false) == "🖱 
 Check(DeviceList.FlyoutText(off1, null, now.AddSeconds(2), null, diagnostics: false) == "🖱 G502 X PLUS: —\n🎧 PRO X WIRELESS: 92%", "diagnostics off: no reason under '—'");
 Check(DeviceList.FlyoutText([], "G HUB не запущен", now, null, diagnostics: false) == "Нет данных: G HUB не запущен", "diagnostics off: the whole-connection state is still shown");
 Check(DeviceList.FlyoutText(mine, null, now, null, diagnostics: true) == DeviceList.FlyoutText(mine, null, now), "diagnostics on: as before");
+// --- Update check: tags compared as numbers, bad replies never give the red dot ---
+var installed = new Version(1, 1, 15, 0);
+Check(UpdateCheck.ParseTag("v1.1.20.0") == new Version(1, 1, 20, 0) && UpdateCheck.ParseTag("1.2") == new Version(1, 2, 0, 0), "tags v1.1.20.0 and 1.2 parsed");
+Check(new[] { null, "", "v", "1", "v1.1.x.0", "1.1.15.0-beta", "1..2", "1.2.3.4.5", "v-1.2", " 1.2", "1.2 ", "99999999999.1" }.All(t => UpdateCheck.ParseTag(t) is null), "malformed tags rejected");
+Check(UpdateCheck.ParseTag("v1.1.100.0") > UpdateCheck.ParseTag("v1.1.20.0"), "1.1.100 > 1.1.20: numbers, not strings");
+static string Release(string tag, string url = "https://github.com/mrmaxxxx/LoggyBat/releases/tag/x", bool pre = false) =>
+    JsonSerializer.Serialize(new { tag_name = tag, html_url = url, draft = false, prerelease = pre });
+var newer = UpdateCheck.Evaluate(Release("v1.1.20.0"), installed, now);
+Check(newer is { Status: UpdateStatus.Available, Latest: { Build: 20 } } && UpdateCheck.ShowsDot(newer, installed), "newer release -> available, red dot");
+Check(UpdateCheck.Evaluate(Release("v1.1.15.0"), installed, now) is { Status: UpdateStatus.NoUpdate, Text: "Обновлений нет (последний релиз 1.1.15.0)" }, "same version -> no update");
+Check(UpdateCheck.Evaluate(Release("v1.1.9.0"), installed, now).Status == UpdateStatus.NoUpdate, "older release (1.1.9 < 1.1.15) -> no update");
+var badTag = UpdateCheck.Evaluate(Release("latest"), installed, now);
+Check(badTag.Status == UpdateStatus.Failed && !UpdateCheck.ShowsDot(badTag, installed) && badTag.Text.StartsWith("Не удалось проверить"), "malformed tag -> failed, no red dot");
+Check(UpdateCheck.Evaluate(Release("v9.0.0.0", "https://evil.example/LoggyBat/releases/"), installed, now).Status == UpdateStatus.Failed, "foreign release link rejected");
+Check(UpdateCheck.Evaluate(Release("v9.0.0.0", pre: true), installed, now).Status == UpdateStatus.Failed, "pre-release ignored");
+Check(UpdateCheck.Evaluate("<html>", installed, now).Status == UpdateStatus.Failed && UpdateCheck.Evaluate("[]", installed, now).Status == UpdateStatus.Failed, "garbage reply -> failed");
+Check(!UpdateCheck.ShowsDot(newer, new Version(1, 1, 20, 0)) && !UpdateCheck.ShowsDot(null, installed), "after updating to that version the dot is gone");
 Console.WriteLine("All checks passed.");
