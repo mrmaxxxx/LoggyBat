@@ -54,8 +54,18 @@ If LoggyBat is already installed, use the **update kit** (`LoggyBat-update-x64-<
 3. Right-click `Update-LoggyBat.ps1` → **Run with PowerShell**. If you have not accepted this version of
    the terms before, it shows them and asks for **YES** / **ДА**; declining stops with no changes.
    The script installs the new version over the old one (no uninstall) and starts WidBar again.
+   If this version is already installed but you have not accepted the terms in the kit yet, the script
+   only shows them and records your consent; nothing is installed.
 
 A standalone `.msix` is not offered as a separate installation method.
+
+## What it shows
+
+- **Taskbar:** an icon and the charge for each device (`92%`), an orange bolt while it is charging, `—`
+  when there is no charge.
+- **Flyout:** every device with its icon, name, charge and a turquoise bar; the orange bolt while
+  charging; an empty bar and `—` when there is no charge. Unknown device types get an adapter icon.
+- A red dot on the right of the taskbar part when a newer release is found (see *Update check*).
 
 ## Settings
 
@@ -68,8 +78,6 @@ Open the flyout and click WidBar's gear (or *Configure* in WidBar). WidBar saves
   device moves in. Devices are remembered by model, because G HUB gives no permanent id for a single
   unit: two identical devices are ticked and moved together, and each is still shown separately with its
   own charge.
-- **Diagnostics** in the flyout (off by default): the time G HUB answered and the reason for `—` under
-  each device.
 - **Updates:** the installed version, **Проверить сейчас** (Check now) and the automatic check.
 
 ## Update check
@@ -103,8 +111,7 @@ do not appear in LoggyBat.
   (up to ~20 s); `—` is shown meanwhile.
 - The taskbar shows up to three devices (set in the settings); the flyout shows all.
 - The microphone icon is assigned to G HUB's device type `MICROPHONE`, which has not been seen on a real
-  device yet; devices of unknown types get 🔋.
-- The time in the flyout is when G HUB answered, not when the battery was measured.
+  device yet; devices of unknown types get the adapter icon.
 - The percentage is taken from G HUB as is; a 1 % difference from the G HUB window was observed once,
   cause unknown.
 
