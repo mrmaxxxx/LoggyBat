@@ -78,7 +78,8 @@ Open the flyout and click WidBar's gear (or *Configure* in WidBar). WidBar saves
   device moves in. Devices are remembered by model, because G HUB gives no permanent id for a single
   unit: two identical devices are ticked and moved together, and each is still shown separately with its
   own charge.
-- **Updates:** the installed version, **Проверить сейчас** (Check now) and the automatic check.
+- **Updates:** the installed version, **Проверить сейчас** (Check now) with its result right below it (a found
+  update with a link to its release page, "no updates" or an error), and the automatic check.
 
 ## Update check
 
