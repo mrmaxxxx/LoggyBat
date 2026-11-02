@@ -30,6 +30,9 @@ for path in sorted(images.glob('*.png')):
     if path.name.startswith(('MediumTile', 'LargeTile', 'SmallTile')):
         share = 0.8  # Start tiles get a little air around the plate
     fit(width, height, share).save(path)
+    # MSIX refuses manifest images over 200 KB (APPX3207); LargeTile/SplashScreen scale-400 were
+    # removed for that reason, Windows falls back to scale-200 there.
+    assert path.stat().st_size <= 204800, f'{path.name} is over the 204800-byte MSIX limit'
 
 square.resize((256, 256), Image.LANCZOS).save(
     root / 'src/LoggyBat/LoggyBat.ico', sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (256, 256)])
