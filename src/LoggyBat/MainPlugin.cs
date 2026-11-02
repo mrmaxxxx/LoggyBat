@@ -24,7 +24,10 @@ public sealed class MainPlugin :
     private Task? _updateLoop;
     private AutoCheckPolicy? _autoCheck;
     private DispatcherQueue? _ui;
+    private Grid? _previewRoot;
     private StackPanel? _preview;
+    private Grid? _flyoutRoot;
+    private Border? _flyoutDivider;
     private StackPanel? _flyoutList;
 
     // What the widget shows: the saved settings, or the draft while the settings window is open.
@@ -40,7 +43,7 @@ public sealed class MainPlugin :
     // settings change and after RequestPreviewRefresh.
     public override int PreviewLogicalWidth => 20 + 85 * _settings.Count + (ShowDot ? 16 : 0);
     public override int FlyoutWidth => 360;
-    public override int FlyoutHeight => 260;
+    public override int FlyoutHeight => 320;
     public override WidgetFlyoutBackdrop FlyoutBackdrop =>
         WidgetFlyoutBackdrop.Acrylic;
 
@@ -118,36 +121,37 @@ public sealed class MainPlugin :
             VerticalAlignment = VerticalAlignment.Center
         };
 
-        var root = new Grid { Background = null };
-        root.Children.Add(_preview);
+        _previewRoot = new Grid { Background = null };
+        _previewRoot.Children.Add(_preview);
+        // WidBar applies the Windows theme; the vector icons take their colour from it, so redraw.
+        _previewRoot.ActualThemeChanged += (_, _) => UpdatePreview();
 
         UpdatePreview();
         UpdateActive();
-        return root;
+        return _previewRoot;
     }
 
     public override UIElement? CreateFlyoutContent()
     {
         _ui ??= DispatcherQueue.GetForCurrentThread();
-        _flyoutList = new StackPanel { Spacing = 16 };
-        UpdateFlyout();
+        _flyoutList = new StackPanel();
+        _flyoutDivider = new Border { Height = 1, Margin = new Thickness(0, 10, 0, 0) };
 
-        // Same look as the former StackPanel (padding 20, gap 12); the Grid gives the
-        // list a bounded height so a long list scrolls inside the fixed-size flyout.
-        var panel = new Grid
-        {
-            RowSpacing = 12,
-            Padding = new Thickness(20)
-        };
-        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        // "Шкалы": title, a divider, then the device rows; the Grid gives the list a bounded
+        // height so a long list scrolls inside the fixed-size flyout.
+        _flyoutRoot = new Grid { Padding = new Thickness(20, 16, 20, 8) };
+        _flyoutRoot.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        _flyoutRoot.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        _flyoutRoot.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-        panel.Children.Add(new TextBlock
+        _flyoutRoot.Children.Add(new TextBlock
         {
             Text = "LoggyBat",
             FontSize = 20,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
         });
+        Grid.SetRow(_flyoutDivider, 1);
+        _flyoutRoot.Children.Add(_flyoutDivider);
 
         var list = new ScrollViewer
         {
@@ -155,36 +159,29 @@ public sealed class MainPlugin :
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
         };
-        Grid.SetRow(list, 1);
-        panel.Children.Add(list);
+        Grid.SetRow(list, 2);
+        _flyoutRoot.Children.Add(list);
+        _flyoutRoot.ActualThemeChanged += (_, _) => UpdateFlyout();
 
-        return panel;
+        UpdateFlyout();
+        return _flyoutRoot;
     }
-
-    // The icon is its own element in the emoji font, so its width is measured from the emoji itself
-    // and the glyph is not clipped (the mouse was, when it shared one TextBlock with the text).
-    private static TextBlock IconBlock(string type) => new()
-    {
-        Text = DeviceList.Glyph(type),
-        FontFamily = new FontFamily("Segoe UI Emoji"),
-        FontSize = 16,
-        VerticalAlignment = VerticalAlignment.Center
-    };
 
     private static TextBlock TextLine(string text) => new() { Text = text, FontSize = 16, TextWrapping = TextWrapping.Wrap };
 
     private static Brush DotBrush => new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 0xE8, 0x11, 0x23));
 
-    // Same look as the former single line "🖱 92%   🎧 69%"; the red dot sits on the right.
+    // Taskbar: "icon + percent" per device (no bars), the orange bolt while charging, the red dot on the right.
     private void UpdatePreview()
     {
-        if (_preview is null)
+        if (_preview is null || _previewRoot is null)
             return;
 
+        var theme = _previewRoot.ActualTheme;
         _preview.Children.Clear();
-        foreach (var (type, percent) in DeviceList.PreviewItems(_ghub.Devices, _settings, DateTimeOffset.Now))
+        foreach (var (type, percent, charging) in DeviceList.PreviewItems(_ghub.Devices, _settings, DateTimeOffset.Now))
         {
-            var icon = IconBlock(type);
+            var icon = Icons.Device(DeviceList.IconKind(type), 16, theme);
             icon.Margin = new Thickness(_preview.Children.Count > 0 ? 14 : 0, 0, 5, 0);
             _preview.Children.Add(icon);
             _preview.Children.Add(new TextBlock
@@ -194,6 +191,12 @@ public sealed class MainPlugin :
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 VerticalAlignment = VerticalAlignment.Center
             });
+            if (charging)
+            {
+                var bolt = Icons.Bolt(16);
+                bolt.Margin = new Thickness(3, 0, 0, 0);
+                _preview.Children.Add(bolt);
+            }
         }
 
         if (ShowDot)
@@ -213,37 +216,80 @@ public sealed class MainPlugin :
 
     private void UpdateFlyout()
     {
-        if (_flyoutList is null)
+        if (_flyoutList is null || _flyoutRoot is null)
             return;
 
+        var theme = _flyoutRoot.ActualTheme;
+        if (_flyoutDivider is not null)
+            _flyoutDivider.Background = new SolidColorBrush(Icons.Divider(theme));
+
         _flyoutList.Children.Clear();
-        _flyoutList.Spacing = _settings.Diagnostics ? 16 : 6;
         if (DeviceList.FlyoutMessage(_ghub.Devices, _ghub.Problem) is { } message)
         {
-            _flyoutList.Children.Add(TextLine(message));
+            var text = TextLine(message);
+            text.Margin = new Thickness(0, 14, 0, 0);
+            _flyoutList.Children.Add(text);
         }
         else
         {
-            foreach (var (type, line, detail) in DeviceList.FlyoutRows(_ghub.Devices, DateTimeOffset.Now, _settings.Devices))
+            var rows = DeviceList.FlyoutRows(_ghub.Devices, DateTimeOffset.Now, _settings.Devices);
+            for (int i = 0; i < rows.Count; i++)
             {
-                // Grid, not a horizontal StackPanel: a long name must wrap inside the flyout width.
-                var head = new Grid { ColumnSpacing = 6 };
-                head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                var name = TextLine(line);
-                Grid.SetColumn(name, 1);
-                head.Children.Add(IconBlock(type));
-                head.Children.Add(name);
-
-                var entry = new StackPanel();
-                entry.Children.Add(head);
-                if (_settings.Diagnostics)
-                    entry.Children.Add(TextLine(detail));
-                _flyoutList.Children.Add(entry);
+                var (type, name, percent, charging, level) = rows[i];
+                _flyoutList.Children.Add(ScaleRow(type, name, percent, charging, level, theme, last: i == rows.Count - 1));
             }
         }
 
         AddUpdateNotice(_flyoutList);
+    }
+
+    // One "Шкалы" row: icon | name ... percent (+ bolt) / turquoise bar on a theme track; a divider below
+    // every row but the last.
+    private static FrameworkElement ScaleRow(string type, string name, string percent, bool charging, int level, ElementTheme theme, bool last)
+    {
+        var head = new Grid { ColumnSpacing = 8 };
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        head.Children.Add(new TextBlock
+        {
+            Text = name,
+            FontSize = 15,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        var value = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+        value.Children.Add(new TextBlock { Text = percent, FontSize = 20, VerticalAlignment = VerticalAlignment.Center });
+        if (charging)
+            value.Children.Add(Icons.Bolt(18));
+        Grid.SetColumn(value, 1);
+        head.Children.Add(value);
+
+        // The bar: a theme track with a turquoise part of `level` percent (nothing when there is no charge).
+        var bar = new Grid { Height = 8, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(Icons.Track(theme)) };
+        if (level > 0)
+        {
+            bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(level, GridUnitType.Star) });
+            bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100 - level, GridUnitType.Star) });
+            bar.Children.Add(new Border { CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(Icons.Bar) });
+        }
+
+        var right = new StackPanel { Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+        right.Children.Add(head);
+        right.Children.Add(bar);
+
+        var row = new Grid { ColumnSpacing = 16, Padding = new Thickness(0, 14, 0, 14) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.Children.Add(Icons.Device(DeviceList.IconKind(type), 30, theme));
+        Grid.SetColumn(right, 1);
+        row.Children.Add(right);
+
+        return new Border
+        {
+            Child = row,
+            BorderThickness = new Thickness(0, 0, 0, last ? 0 : 1),
+            BorderBrush = new SolidColorBrush(Icons.Divider(theme))
+        };
     }
 
     // A found newer release: message and a link to its page. Nothing is downloaded or installed.
@@ -262,10 +308,6 @@ public sealed class MainPlugin :
             notice.Children.Add(head);
             notice.Children.Add(link);
             list.Children.Add(notice);
-        }
-        else if (_settings.Diagnostics && UpdateChecker.Shared.Last is { Status: UpdateStatus.Failed } failed)
-        {
-            list.Children.Add(TextLine($"Проверка обновлений: {failed.Text}"));
         }
     }
 
@@ -359,6 +401,9 @@ public sealed class MainPlugin :
         _stop.Dispose();
 
         _preview = null;
+        _previewRoot = null;
         _flyoutList = null;
+        _flyoutRoot = null;
+        _flyoutDivider = null;
     }
 }

@@ -120,9 +120,9 @@ public static class DeviceList
             .ToList();
     }
 
+    // Text form of a device type, for logs and tests (the UI draws vector icons, see IconKind).
     // MOUSE and HEADSET are G HUB's deviceType strings seen on Max's PC. KEYBOARD and MICROPHONE are
-    // expected strings not yet seen on a real device (the log records every type, see GHubClient);
-    // any other type gets the neutral 🔋, so a wrong guess costs only the icon.
+    // expected strings not yet seen on a real device (the log records every type, see GHubClient).
     public static string Icon(string type) => type switch
     {
         "MOUSE" => "🖱",
@@ -132,9 +132,16 @@ public static class DeviceList
         _ => "🔋",
     };
 
-    // What the UI draws: U+FE0F asks for the colour emoji. 🖱 and ⌨ default to the narrow text form,
-    // and drawing the wide emoji into that narrow box is the likely cause of the clipped mouse.
-    public static string Glyph(string type) => Icon(type) + "\uFE0F";
+    // Which approved vector icon the UI draws (Icons.cs); any other type gets the adapter, so a wrong
+    // guess about a type string costs only the icon.
+    public static string IconKind(string type) => type switch
+    {
+        "MOUSE" => "mouse",
+        "HEADSET" => "headset",
+        "KEYBOARD" => "keyboard",
+        "MICROPHONE" => "microphone",
+        _ => "adapter",
+    };
 
     private static int Priority(string type) => type switch
     {
@@ -151,31 +158,36 @@ public static class DeviceList
         r.ReceivedAt is { } at &&
         now - at < StaleAfter;
 
-    public static string Percentage(DeviceReading r, DateTimeOffset now) =>
-        IsFresh(r, now)
-            ? r.Percent + "%" + (r.Charging ? " ⚡" : "")
-            : "—";
+    // "92%", or "—" when there is no fresh charge. Charging is shown separately (the orange bolt).
+    public static string PercentText(DeviceReading r, DateTimeOffset now) =>
+        IsFresh(r, now) ? r.Percent + "%" : "—";
 
-    // Taskbar: settings.Count devices, automatic or only the picked models; a single "🔋 —" while
-    // there is nothing to show.
-    public static IReadOnlyList<(string Type, string Percent)> PreviewItems(
+    public static bool ShowsCharging(DeviceReading r, DateTimeOffset now) => IsFresh(r, now) && r.Charging;
+
+    // Text form with the bolt as " ⚡", for logs and tests.
+    public static string Percentage(DeviceReading r, DateTimeOffset now) =>
+        PercentText(r, now) + (ShowsCharging(r, now) ? " ⚡" : "");
+
+    // Taskbar: settings.Count devices, automatic or only the picked models; a single "—" with the
+    // adapter icon while there is nothing to show.
+    public static IReadOnlyList<(string Type, string Percent, bool Charging)> PreviewItems(
         IReadOnlyList<DeviceReading> rows, WidgetSettings settings, DateTimeOffset now)
     {
         var picked = settings.Devices;
         var shown = ForDisplay(rows, picked)
             .Where(x => picked.Count == 0 || picked.Any(c => c.Model == x.Row.Model))
             .Take(settings.Count)
-            .Select(x => (x.Row.Type, Percentage(x.Row, now)))
+            .Select(x => (x.Row.Type, PercentText(x.Row, now), ShowsCharging(x.Row, now)))
             .ToList();
 
-        return shown.Count > 0 ? shown : [("", "—")];
+        return shown.Count > 0 ? shown : [("", "—", false)];
     }
 
-    public static IReadOnlyList<(string Type, string Percent)> PreviewItems(IReadOnlyList<DeviceReading> rows, DateTimeOffset now) =>
+    public static IReadOnlyList<(string Type, string Percent, bool Charging)> PreviewItems(IReadOnlyList<DeviceReading> rows, DateTimeOffset now) =>
         PreviewItems(rows, WidgetSettings.Default, now);
 
     public static string PreviewText(IReadOnlyList<DeviceReading> rows, WidgetSettings settings, DateTimeOffset now) =>
-        string.Join("   ", PreviewItems(rows, settings, now).Select(x => $"{Icon(x.Type)} {x.Percent}"));
+        string.Join("   ", PreviewItems(rows, settings, now).Select(x => $"{Icon(x.Type)} {x.Percent}{(x.Charging ? " ⚡" : "")}"));
 
     public static string PreviewText(IReadOnlyList<DeviceReading> rows, DateTimeOffset now) =>
         PreviewText(rows, WidgetSettings.Default, now);
@@ -191,29 +203,18 @@ public static class DeviceList
             _ => $"Нет данных: {clientProblem}",
         };
 
-    // One entry per device: "G502 X PLUS: 92%" and the detail line under it.
-    public static IReadOnlyList<(string Type, string Line, string Detail)> FlyoutRows(
+    // One flyout row per device ("Шкалы"): name, "92%" or "—", the bolt, and the bar level 0..100
+    // (0 when there is no fresh charge). The reasons for "—" stay in the log only.
+    public static IReadOnlyList<(string Type, string Name, string Percent, bool Charging, int Level)> FlyoutRows(
         IReadOnlyList<DeviceReading> rows, DateTimeOffset now, IReadOnlyList<ChosenDevice>? chosen = null) =>
         ForDisplay(rows, chosen)
-            .Select(x => (x.Row.Type, $"{x.Label}: {Percentage(x.Row, now)}", Status(x.Row, now)))
+            .Select(x => (x.Row.Type, x.Label, PercentText(x.Row, now), ShowsCharging(x.Row, now),
+                IsFresh(x.Row, now) ? Math.Clamp(x.Row.Percent ?? 0, 0, 100) : 0))
             .ToList();
 
-    // With diagnostics off only names and charge are shown; the detail lines (G HUB answer time,
-    // the exact reason for "—") are left out.
+    // Text form of the flyout, for tests: one line per device, or the state of the whole connection.
     public static string FlyoutText(
-        IReadOnlyList<DeviceReading> rows, string? clientProblem, DateTimeOffset now,
-        IReadOnlyList<ChosenDevice>? chosen, bool diagnostics) =>
+        IReadOnlyList<DeviceReading> rows, string? clientProblem, DateTimeOffset now, IReadOnlyList<ChosenDevice>? chosen = null) =>
         FlyoutMessage(rows, clientProblem)
-        ?? (diagnostics
-            ? string.Join("\n\n", FlyoutRows(rows, now, chosen).Select(x => $"{Icon(x.Type)} {x.Line}\n{x.Detail}"))
-            : string.Join("\n", FlyoutRows(rows, now, chosen).Select(x => $"{Icon(x.Type)} {x.Line}")));
-
-    public static string FlyoutText(IReadOnlyList<DeviceReading> rows, string? clientProblem, DateTimeOffset now) =>
-        FlyoutText(rows, clientProblem, now, null, diagnostics: true);
-
-    // Receive time only. Kept short: the flyout is narrow.
-    private static string Status(DeviceReading r, DateTimeOffset now) =>
-        IsFresh(r, now) ? $"Ответ G HUB: {r.ReceivedAt:HH:mm:ss}"
-        : r.Problem is not null ? $"Нет данных: {r.Problem}"
-        : "Нет данных: G HUB давно не отвечал";
+        ?? string.Join("\n", FlyoutRows(rows, now, chosen).Select(x => $"{Icon(x.Type)} {x.Name}: {x.Percent}{(x.Charging ? " ⚡" : "")}"));
 }

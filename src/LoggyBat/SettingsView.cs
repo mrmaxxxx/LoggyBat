@@ -72,6 +72,7 @@ internal sealed class SettingsView
 
         panel.Children.Add(Text("Устройства и порядок на панели"));
         FillDeviceRows();
+        _deviceRows.ActualThemeChanged += (_, _) => FillDeviceRows();   // icon colours follow the theme
         panel.Children.Add(_deviceRows);
         panel.Children.Add(Note(
             "Если ничего не отмечено, устройства выбираются автоматически: мышь, гарнитура, клавиатура, " +
@@ -82,18 +83,15 @@ internal sealed class SettingsView
             "отмечаются и переставляются вместе, а на панели и в окне каждое показывается отдельно, " +
             "со своим зарядом."));
 
-        panel.Children.Add(Header("Окно виджета"));
-        var diagnostics = new ToggleSwitch
-        {
-            Header = "Диагностика: время ответа G HUB и причина «—» под каждым устройством",
-            IsOn = _settings.Diagnostics
-        };
-        diagnostics.Toggled += (_, _) => Save(_settings with { Diagnostics = diagnostics.IsOn });
-        panel.Children.Add(diagnostics);
-
         panel.Children.Add(Header("Обновления"));
         panel.Children.Add(Text(_installed is { } v ? $"Установлена версия {v}" : "Версия неизвестна: LoggyBat запущен не из пакета"));
-        var auto = new ToggleSwitch { Header = "Проверять обновления автоматически", IsOn = _settings.AutoUpdateCheck };
+        var auto = new ToggleSwitch
+        {
+            Header = new TextBlock { Text = "Проверять обновления автоматически", TextWrapping = TextWrapping.Wrap },
+            OnContent = "Вкл",
+            OffContent = "Выкл",
+            IsOn = _settings.AutoUpdateCheck
+        };
         auto.Toggled += (_, _) => Save(_settings with { AutoUpdateCheck = auto.IsOn });
         panel.Children.Add(auto);
         panel.Children.Add(Note(
@@ -122,11 +120,44 @@ internal sealed class SettingsView
         });
         root.Children.Add(CheckNowRow());
 
-        return new ScrollViewer { Content = root, Padding = new Thickness(0, 0, 12, 0) };
+        var scroller = new ScrollViewer
+        {
+            Content = root,
+            Padding = new Thickness(0, 0, 12, 0),
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            HorizontalScrollMode = ScrollMode.Disabled
+        };
+        FitToWindow(scroller);
+        return scroller;
+    }
+
+    // In 1.1.19 the long notes were cut off on the right instead of wrapping: the settings host seems to
+    // measure its content with unlimited width. Cap the width at what is visible in the window, assuming
+    // the host keeps the same margin on both sides; follow window resizes.
+    private static void FitToWindow(FrameworkElement view)
+    {
+        void Fit()
+        {
+            if (view.XamlRoot is not { } root)
+                return;
+            double left = Math.Max(0, view.TransformToVisual(null).TransformPoint(new Windows.Foundation.Point(0, 0)).X);
+            view.MaxWidth = Math.Max(200, root.Size.Width - 2 * left);
+        }
+
+        bool subscribed = false;
+        view.Loaded += (_, _) =>
+        {
+            Fit();
+            if (!subscribed && view.XamlRoot is { } root)
+            {
+                root.Changed += (_, _) => Fit();
+                subscribed = true;
+            }
+        };
     }
 
     // Outside the settings themselves: it saves nothing, so it works even for settings of a newer
-    // version, and its result is always shown (also errors, whatever the diagnostics switch says).
+    // version, and its result (also an error) is always shown.
     private UIElement CheckNowRow()
     {
         var result = Text(UpdateChecker.Shared.Last is { } last ? Describe(last) : "Ещё не проверялось");
@@ -181,11 +212,7 @@ internal sealed class SettingsView
             content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             var name = new TextBlock { Text = label, TextWrapping = TextWrapping.Wrap };
             Grid.SetColumn(name, 1);
-            content.Children.Add(new TextBlock
-            {
-                Text = DeviceList.Glyph(entry.Device.Type),
-                FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe UI Emoji")
-            });
+            content.Children.Add(Icons.Device(DeviceList.IconKind(entry.Device.Type), 18, _deviceRows.ActualTheme));
             content.Children.Add(name);
 
             var check = new CheckBox { Content = content, IsChecked = entry.Picked };

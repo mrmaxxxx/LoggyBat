@@ -11,13 +11,13 @@ public sealed record ChosenDevice(string Model, string Type, string Name);
 public sealed record WidgetSettings(
     int Count,                             // devices on the taskbar: 1..3
     IReadOnlyList<ChosenDevice> Devices,   // picked models in taskbar order; empty = automatic
-    bool Diagnostics,                      // flyout shows the G HUB answer time and reasons
     bool AutoUpdateCheck,
     bool FromNewerVersion)                 // saved by a newer LoggyBat: shown, never overwritten
 {
     public const int Version = 1;
 
-    public static readonly WidgetSettings Default = new(2, [], false, true, false);
+    // A "diagnostics" field written by 1.1.17-1.1.19 is no longer read; ToJson keeps it like any unknown field.
+    public static readonly WidgetSettings Default = new(2, [], true, false);
 
     // Anything unreadable falls back to the default for that field only; unknown fields are ignored here
     // and kept by ToJson.
@@ -39,7 +39,6 @@ public sealed record WidgetSettings(
         return new WidgetSettings(
             Int(root, "count") is int count and >= 1 and <= 3 ? count : Default.Count,
             devices,
-            Bool(root, "diagnostics") ?? Default.Diagnostics,
             Bool(root, "autoUpdateCheck") ?? Default.AutoUpdateCheck,
             Int(root, "version") > Version);
     }
@@ -53,7 +52,6 @@ public sealed record WidgetSettings(
         root["devices"] = new JsonArray(Devices
             .Select(d => (JsonNode)new JsonObject { ["model"] = d.Model, ["type"] = d.Type, ["name"] = d.Name })
             .ToArray());
-        root["diagnostics"] = Diagnostics;
         root["autoUpdateCheck"] = AutoUpdateCheck;
         return root.ToJsonString();
     }

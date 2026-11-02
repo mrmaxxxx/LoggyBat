@@ -70,8 +70,9 @@ var mine = DeviceList.Reconcile([], listed, true, now).ToList();
 mine[0] = DeviceList.ApplyBattery(mine[0], J(Charge69Charging), now);
 mine[1] = DeviceList.ApplyBattery(mine[1], J(Charge92), now);
 Check(DeviceList.PreviewText(mine, now) == "🖱 92%   🎧 69% ⚡", "Max's mouse + headset look exactly as before");
-Check(DeviceList.FlyoutText(mine, null, now) ==
-    "🖱 G502 X PLUS: 92%\nОтвет G HUB: 21:42:22\n\n🎧 PRO X WIRELESS: 69% ⚡\nОтвет G HUB: 21:42:22", "flyout for mouse + headset");
+Check(DeviceList.FlyoutText(mine, null, now) == "🖱 G502 X PLUS: 92%\n🎧 PRO X WIRELESS: 69% ⚡", "flyout for mouse + headset: names and charge only (no diagnostics)");
+Check(DeviceList.FlyoutRows(mine, now).SequenceEqual([("MOUSE", "G502 X PLUS", "92%", false, 92), ("HEADSET", "PRO X WIRELESS", "69%", true, 69)]), "flyout rows: name, percent, bolt, bar level");
+Check(DeviceList.PreviewItems(mine, now).SequenceEqual([("MOUSE", "92%", false), ("HEADSET", "69%", true)]), "taskbar items: percent and charging separately (orange bolt)");
 
 var four = Poll([], [Other("dev0"), Keyboard("dev1"), Headset("dev2"), Mouse("dev3")], true, now, Charge92);
 Check(DeviceList.PreviewText(four, now) == "🖱 92%   🎧 92%", "3+ devices: taskbar shows mouse, headset");
@@ -80,8 +81,8 @@ Check(DeviceList.FlyoutText(four, null, now).Contains("⌨ G915: 92%") && Device
 
 // --- Icons ---
 Check(DeviceList.Icon("MICROPHONE") == "🎤" && DeviceList.Icon("SOMETHING_NEW") == "🔋" && DeviceList.Icon("") == "🔋", "microphone 🎤, unknown type 🔋");
-Check(DeviceList.Glyph("MOUSE") == "🖱\uFE0F" && DeviceList.Glyph("HEADSET") == "🎧\uFE0F", "UI glyph asks for the emoji form (U+FE0F)");
-Check(DeviceList.PreviewItems([], now).SequenceEqual([("", "—")]), "no devices: one neutral item");
+Check(new[] { "MOUSE", "HEADSET", "KEYBOARD", "MICROPHONE", "SPEAKER", "" }.Select(DeviceList.IconKind).SequenceEqual(["mouse", "headset", "keyboard", "microphone", "adapter", "adapter"]), "vector icons: unknown types get the adapter");
+Check(DeviceList.PreviewItems([], now).SequenceEqual([("", "—", false)]), "no devices: one neutral item");
 var mic = Poll([], [Other("dev0"), new Dev("dev1", "MICROPHONE", "Mic", "mic", "ACTIVE")], true, now, Charge92);
 Check(DeviceList.ForDisplay(mic).Select(x => x.Row.Type).SequenceEqual(["MICROPHONE", "SPEAKER"]), "microphone sorts before unknown types");
 
@@ -114,7 +115,8 @@ var rows = DeviceList.Reconcile([], [Mouse("dev1"), Headset("dev2")], true, now)
 rows[0] = DeviceList.ApplyBattery(rows[0], J(Charge92), now);
 rows[1] = DeviceList.ApplyBattery(rows[1], J(Off), now);
 Check(DeviceList.PreviewText(rows, now) == "🖱 92%   🎧 —", "headset off: mouse still shown");
-Check(DeviceList.FlyoutText(rows, null, now).Contains("Нет данных: устройство выключено?"), "present but no charge != gone");
+Check(rows[1].Problem == "устройство выключено?" && rows[1].GoneSince is null && DeviceList.FlyoutText(rows, null, now).Contains("🎧 PRO X WIRELESS: —"), "present but no charge != gone; flyout shows '—' (reason only in the log)");
+Check(DeviceList.FlyoutRows(rows, now)[1] is { Percent: "—", Level: 0, Charging: false }, "no charge: '—' and an empty bar");
 
 // --- Freshness ---
 Check(DeviceList.PreviewText(t0, now.AddSeconds(41)) == "🖱 —   🎧 —", "charge older than 40 s is not shown");
@@ -139,7 +141,7 @@ var on1 = Poll([], listed, true, now, Charge92);
 var off1 = Poll(on1, off, false, now.AddSeconds(2), Charge92);
 Check(off1.Count == 2, "switched-off mouse stays one row, no duplicate");
 Check(DeviceList.PreviewText(off1, now.AddSeconds(2)) == "🖱 —   🎧 92%", "mouse off: mouse —, headset still shown");
-Check(DeviceList.FlyoutText(off1, null, now.AddSeconds(2)).Contains("🖱 G502 X PLUS: —\nНет данных: не подключено (выключено?)"), "mouse off: flyout says 'не подключено (выключено?)'");
+Check(DeviceList.FlyoutText(off1, null, now.AddSeconds(2)) == "🖱 G502 X PLUS: —\n🎧 PRO X WIRELESS: 92%" && off1.Single(r => r.Id == "dev00000001").Problem == "не подключено (выключено?)", "mouse off: '—' in the flyout, the reason kept for the log");
 Check(DeviceList.InactiveProblem("SOMETHING_ELSE") == "не активно в G HUB", "other inactive states keep the old text");
 var on2 = Poll(off1, listed, false, now.AddSeconds(12), Charge92);
 Check(DeviceList.PreviewText(on2, now.AddSeconds(12)) == "🖱 92%   🎧 92%", "mouse back on: charge shown again");
@@ -147,14 +149,16 @@ Check(DeviceList.PreviewText(on2, now.AddSeconds(12)) == "🖱 92%   🎧 92%", 
 // --- Settings: defaults, damaged input, unknown and newer fields ---
 static WidgetSettings S(string json) => WidgetSettings.Parse(json);
 Check(S("") == WidgetSettings.Default && S("not json") == WidgetSettings.Default && S("[1,2]") == WidgetSettings.Default, "no/damaged settings -> defaults");
-Check(WidgetSettings.Default is { Count: 2, Devices.Count: 0, Diagnostics: false, AutoUpdateCheck: true, FromNewerVersion: false }, "clean install: 2 devices, automatic, diagnostics off, update check on");
-Check(S("""{"count":7,"diagnostics":"yes","autoUpdateCheck":false}""") is { Count: 2, Diagnostics: false, AutoUpdateCheck: false }, "bad field -> default for that field only");
+Check(WidgetSettings.Default is { Count: 2, Devices.Count: 0, AutoUpdateCheck: true, FromNewerVersion: false }, "clean install: 2 devices, automatic, update check on");
+Check(S("""{"count":7,"autoUpdateCheck":false}""") is { Count: 2, AutoUpdateCheck: false }, "bad field -> default for that field only");
+const string Old119 = """{"version":1,"count":2,"devices":[],"diagnostics":true,"autoUpdateCheck":true}""";
+Check(S(Old119) is { Count: 2, AutoUpdateCheck: true } && S(Old119).ToJson(Old119).Contains("\"diagnostics\":true"), "settings of 1.1.19 (with 'diagnostics') load; the old field is kept, not used");
 Check(S("""{"count":3,"devices":[{"model":"g502x_plus","type":"MOUSE","name":"G502 X PLUS"},{"model":"g502x_plus"},{"type":"X"},5]}""") is { Count: 3, Devices: [{ Model: "g502x_plus", Type: "MOUSE" }] }, "devices: duplicates and entries without a model skipped");
 var withExtra = """{"count":1,"futureOption":{"a":1},"version":1}""";
 var saved = S(withExtra) with { Count = 3 };
 Check(saved.ToJson(withExtra).Contains("\"futureOption\":{\"a\":1}") && S(saved.ToJson(withExtra)).Count == 3, "unknown fields survive a save");
 Check(S("""{"version":2,"count":3,"newThing":true}""") is { FromNewerVersion: true, Count: 3 }, "settings of a newer version are recognised (shown, not overwritten)");
-Check(S(WidgetSettings.Default.ToJson(null)) is { Count: 2, Devices.Count: 0, Diagnostics: false, AutoUpdateCheck: true, FromNewerVersion: false }, "default settings round-trip");
+Check(S(WidgetSettings.Default.ToJson(null)) is { Count: 2, Devices.Count: 0, AutoUpdateCheck: true, FromNewerVersion: false } && !WidgetSettings.Default.ToJson(null).Contains("diagnostics"), "default settings round-trip, no 'diagnostics' written");
 
 // --- Picked devices on the taskbar ---
 var pickMouse = WidgetSettings.Default with { Count = 1, Devices = [new ChosenDevice("g502x_plus", "MOUSE", "G502 X PLUS")] };
@@ -163,19 +167,17 @@ var pickHeadsetFirst = WidgetSettings.Default with { Devices = [new ChosenDevice
 Check(DeviceList.PreviewText(four, pickHeadsetFirst, now) == "🎧 92%   ⌨ 92%", "picked order is kept, mouse not picked -> not shown");
 var headsetOnly = Poll([], [Mouse("dev1"), Keyboard("dev2")], true, now, Charge92);
 Check(DeviceList.PreviewText(headsetOnly, pickHeadsetFirst, now) == "🎧 —   ⌨ 92%", "picked device missing -> '—' in its place, nothing moves in");
-Check(DeviceList.FlyoutText(headsetOnly, null, now).Contains("G502 X PLUS") && DeviceList.FlyoutRows(headsetOnly, now, pickHeadsetFirst.Devices)[0].Line == "PRO X WIRELESS: —", "flyout: missing picked device first as '—', others still listed");
+Check(DeviceList.FlyoutText(headsetOnly, null, now).Contains("G502 X PLUS") && DeviceList.FlyoutRows(headsetOnly, now, pickHeadsetFirst.Devices)[0] is { Name: "PRO X WIRELESS", Percent: "—", Level: 0 }, "flyout: missing picked device first as '—', others still listed");
 Check(DeviceList.PreviewText([], pickHeadsetFirst, now) == "🎧 —   ⌨ —", "G HUB not answering: picked devices keep their places");
 var threeAuto = WidgetSettings.Default with { Count = 3 };
 Check(DeviceList.PreviewText(four, threeAuto, now) == "🖱 92%   🎧 92%   ⌨ 92%", "count 3, automatic");
 var twinsPicked = WidgetSettings.Default with { Count = 3, Devices = [new ChosenDevice("g502x_plus", "MOUSE", "G502 X PLUS")] };
 var twinsOneEmpty = twinsUneven.Select(r => r.Id == "dev5" ? DeviceList.WithProblem(r, "x") : r).ToList();
 Check(DeviceList.PreviewText(twinsOneEmpty, twinsPicked, now) == "🖱 92%   🖱 —", "two same models: both shown separately, charges not merged");
-Check(DeviceList.FlyoutRows(twinsOneEmpty, now, twinsPicked.Devices).Select(x => x.Line).SequenceEqual(["G502 X PLUS (1): 92%", "G502 X PLUS (2): —"]), "two same models in the flyout: two rows");
-// --- Diagnostics off (default): names and charge only ---
-Check(DeviceList.FlyoutText(mine, null, now, null, diagnostics: false) == "🖱 G502 X PLUS: 92%\n🎧 PRO X WIRELESS: 69% ⚡", "diagnostics off: no answer time");
-Check(DeviceList.FlyoutText(off1, null, now.AddSeconds(2), null, diagnostics: false) == "🖱 G502 X PLUS: —\n🎧 PRO X WIRELESS: 92%", "diagnostics off: no reason under '—'");
-Check(DeviceList.FlyoutText([], "G HUB не запущен", now, null, diagnostics: false) == "Нет данных: G HUB не запущен", "diagnostics off: the whole-connection state is still shown");
-Check(DeviceList.FlyoutText(mine, null, now, null, diagnostics: true) == DeviceList.FlyoutText(mine, null, now), "diagnostics on: as before");
+Check(DeviceList.FlyoutRows(twinsOneEmpty, now, twinsPicked.Devices).Select(x => $"{x.Name}: {x.Percent}").SequenceEqual(["G502 X PLUS (1): 92%", "G502 X PLUS (2): —"]), "two same models in the flyout: two rows");
+// --- Bars ---
+var levels = DeviceList.Reconcile([], [Mouse("dev1")], true, now).Select(r => DeviceList.ApplyBattery(r, J(Charge92), now)).ToList();
+Check(DeviceList.FlyoutRows(levels, now)[0].Level == 92 && DeviceList.FlyoutRows(levels, now.AddSeconds(41))[0] is { Level: 0, Percent: "—" }, "bar follows the shown charge; a stale charge empties it");
 // --- Update check: tags compared as numbers, bad replies never give the red dot ---
 var installed = new Version(1, 1, 15, 0);
 Check(UpdateCheck.ParseTag("v1.1.20.0") == new Version(1, 1, 20, 0) && UpdateCheck.ParseTag("1.2") == new Version(1, 2, 0, 0), "tags v1.1.20.0 and 1.2 parsed");
@@ -245,7 +247,7 @@ github.Reply(Release("v1.1.15.0"));
 var manual = await checker.CheckNowAsync(installed);
 Check(github.Requests == manualBefore + 1 && manual.Text == "Обновлений нет (последний релиз 1.1.15.0)", "'Check now' always asks GitHub and returns a visible result");
 github.Fail(System.Net.HttpStatusCode.Forbidden);
-Check((await checker.CheckNowAsync(installed)).Text == "Не удалось проверить: GitHub ответил 403", "'Check now' error is returned as text (shown regardless of diagnostics)");
+Check((await checker.CheckNowAsync(installed)).Text == "Не удалось проверить: GitHub ответил 403", "'Check now' error is returned as text (always shown)");
 
 // --- Automatic check: saved setting vs draft, without restarting WidBar ---
 var later = clock.AddDays(10);
