@@ -88,28 +88,55 @@ public static class UpdateCheck
         o.ValueKind == JsonValueKind.Object && o.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.True;
 }
 
-// The request itself and its last result. One per process on purpose (unlike the rest of the widget):
-// all widget instances live in this process, show the same result and share one throttle.
-public static class Updates
+// Whether THIS widget instance may start an automatic check. WidBar gives no "settings saved" event,
+// so: while the settings window is open nothing starts (the switch there may still be a draft); once it
+// is closed, the last JSON WidBar handed over is the real state (Save keeps the last draft, Cancel
+// sends the original back). The settle time covers Cancel's JSON arriving just after the window closes.
+public sealed class AutoCheckPolicy(string? savedJson)
 {
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
-    private static readonly SemaphoreSlim Gate = new(1, 1);
-    private static string? _stateFile;
+    public static readonly TimeSpan Settle = TimeSpan.FromSeconds(10);
 
-    public static UpdateResult? Last { get; private set; }
+    private bool _enabled = WidgetSettings.Parse(savedJson).AutoUpdateCheck;
+    private bool _settingsOpen;
+    private DateTimeOffset _closedAt = DateTimeOffset.MinValue;
+
+    public void OnSettingsJson(string json) => _enabled = WidgetSettings.Parse(json).AutoUpdateCheck;
+    public void OnSettingsOpened() => _settingsOpen = true;
+
+    public void OnSettingsClosed(DateTimeOffset now)
+    {
+        _settingsOpen = false;
+        _closedAt = now;
+    }
+
+    public bool MayStart(DateTimeOffset now) => _enabled && !_settingsOpen && now - _closedAt >= Settle;
+}
+
+// The request itself and its last result. One shared instance per process on purpose (unlike the
+// rest of the widget): all widget instances live in this process, show the same result and share one
+// throttle. Tests build their own with a fake GitHub (HttpMessageHandler) and clock.
+public sealed class UpdateChecker(HttpMessageHandler handler, Func<DateTimeOffset> clock)
+{
+    public static UpdateChecker Shared { get; } = new(new SocketsHttpHandler(), () => DateTimeOffset.Now);
+
+    private readonly HttpClient _http = new(handler) { Timeout = TimeSpan.FromSeconds(10) };
+    private readonly SemaphoreSlim _gate = new(1, 1);
+    private string? _stateFile;
+
+    public UpdateResult? Last { get; private set; }
 
     // The newest release found newer than the installed version. A later failed check keeps it;
     // only a successful "no updates" answer clears it.
-    public static UpdateResult? Found { get; private set; }
+    public UpdateResult? Found { get; private set; }
 
     // internal, not private: the JSON serializer builds it by reflection.
     internal sealed record Stored(UpdateResult? Last, UpdateResult? Found);
 
-    // Raised on a background thread after every check.
-    public static event Action? Changed;
+    // Raised on a background thread after every request.
+    public event Action? Changed;
 
     // The last result survives restarts, so a restart neither repeats the request nor loses the red dot.
-    public static void Load(string dataDirectory)
+    public void Load(string dataDirectory)
     {
         if (_stateFile is not null)
             return;
@@ -126,21 +153,23 @@ public static class Updates
         }
     }
 
-    // Automatic check: at most once a day, or an hour after a failed attempt.
-    public static Task CheckIfDueAsync(Version installed, CancellationToken ct) => RunAsync(installed, onlyIfDue: true, ct);
+    // One step of an instance's background loop: asks GitHub only if this instance's policy allows it
+    // and the last answer is old enough (a day; an hour after a failure).
+    public Task AutoCheckAsync(AutoCheckPolicy policy, Version installed, CancellationToken ct) =>
+        policy.MayStart(clock()) ? RunAsync(installed, onlyIfDue: true, ct) : Task.CompletedTask;
 
-    // The "Check now" button: always asks GitHub.
-    public static Task<UpdateResult> CheckNowAsync(Version installed) => RunAsync(installed, onlyIfDue: false, CancellationToken.None);
+    // The "Check now" button: always asks GitHub, whatever the automatic check is set to.
+    public Task<UpdateResult> CheckNowAsync(Version installed) => RunAsync(installed, onlyIfDue: false, CancellationToken.None);
 
-    private static async Task<UpdateResult> RunAsync(Version installed, bool onlyIfDue, CancellationToken ct)
+    private async Task<UpdateResult> RunAsync(Version installed, bool onlyIfDue, CancellationToken ct)
     {
-        await Gate.WaitAsync(ct);
+        await _gate.WaitAsync(ct);
         try
         {
             // Checked under the lock: two instances starting together make one request, not two.
             if (onlyIfDue && Last is { } last)
             {
-                var age = DateTimeOffset.Now - last.At;
+                var age = clock() - last.At;
                 var interval = last.Status == UpdateStatus.Failed ? TimeSpan.FromHours(1) : TimeSpan.FromDays(1);
                 if (age >= TimeSpan.Zero && age < interval)
                     return last;
@@ -157,24 +186,24 @@ public static class Updates
         }
         finally
         {
-            Gate.Release();
+            _gate.Release();
         }
     }
 
     // Sends only what any HTTPS request carries plus "LoggyBat/<version>" as User-Agent (GitHub requires one).
-    private static async Task<UpdateResult> RequestAsync(Version installed, CancellationToken ct)
+    private async Task<UpdateResult> RequestAsync(Version installed, CancellationToken ct)
     {
-        UpdateResult Failed(string why) => new(UpdateStatus.Failed, null, null, why, DateTimeOffset.Now);
+        UpdateResult Failed(string why) => new(UpdateStatus.Failed, null, null, why, clock());
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, UpdateCheck.LatestApi);
             request.Headers.UserAgent.ParseAdd($"LoggyBat/{installed}");
             request.Headers.Accept.ParseAdd("application/vnd.github+json");
-            using var response = await Http.SendAsync(request, ct);
+            using var response = await _http.SendAsync(request, ct);
             if (!response.IsSuccessStatusCode)
                 return Failed($"GitHub ответил {(int)response.StatusCode}");
 
-            return UpdateCheck.Evaluate(await response.Content.ReadAsStringAsync(ct), installed, DateTimeOffset.Now);
+            return UpdateCheck.Evaluate(await response.Content.ReadAsStringAsync(ct), installed, clock());
         }
         catch (Exception e) when (e is HttpRequestException or IOException)
         {
@@ -186,7 +215,7 @@ public static class Updates
         }
     }
 
-    private static void Save()
+    private void Save()
     {
         if (_stateFile is null)
             return;

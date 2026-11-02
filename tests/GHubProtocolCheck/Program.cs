@@ -193,4 +193,141 @@ Check(UpdateCheck.Evaluate(Release("v9.0.0.0", "https://evil.example/LoggyBat/re
 Check(UpdateCheck.Evaluate(Release("v9.0.0.0", pre: true), installed, now).Status == UpdateStatus.Failed, "pre-release ignored");
 Check(UpdateCheck.Evaluate("<html>", installed, now).Status == UpdateStatus.Failed && UpdateCheck.Evaluate("[]", installed, now).Status == UpdateStatus.Failed, "garbage reply -> failed");
 Check(!UpdateCheck.ShowsDot(newer, new Version(1, 1, 20, 0)) && !UpdateCheck.ShowsDot(null, installed), "after updating to that version the dot is gone");
+// --- Update checker against a fake GitHub: no network, no published test release ---
+var clock = now;
+var github = new FakeGitHub();
+var checker = new UpdateChecker(github, () => clock);
+var stateDir = Directory.CreateTempSubdirectory("loggybat-check").FullName;
+checker.Load(stateDir);
+var autoOn = new AutoCheckPolicy(null);   // clean install: automatic check on
+const string SavedOff = """{"autoUpdateCheck":false}""";
+const string SavedOn = """{"autoUpdateCheck":true}""";
+
+// 1. A newer version is found.
+github.Reply(Release("v1.1.20.0"));
+await checker.AutoCheckAsync(autoOn, installed, default);
+Check(github.Requests == 1 && checker.Found?.Latest == new Version(1, 1, 20, 0) && UpdateCheck.ShowsDot(checker.Found, installed), "transition: newer version found -> red dot");
+Check(github.LastUrl == UpdateCheck.LatestApi && github.LastUserAgent == "LoggyBat/1.1.15.0", "request goes to the GitHub API with User-Agent LoggyBat/<version>");
+var restarted = new UpdateChecker(new FakeGitHub(), () => clock);
+restarted.Load(stateDir);
+await restarted.AutoCheckAsync(autoOn, installed, default);
+Check(restarted.Found?.Latest == new Version(1, 1, 20, 0), "after a restart the found version (and the dot) is still known, without a request");
+clock = clock.AddHours(5);
+await checker.AutoCheckAsync(autoOn, installed, default);
+Check(github.Requests == 1, "automatic check: no second request within a day");
+
+// 2. The next check fails: the found version and the dot stay.
+clock = clock.AddDays(1);
+github.Fail(System.Net.HttpStatusCode.InternalServerError);
+await checker.AutoCheckAsync(autoOn, installed, default);
+Check(github.Requests == 2 && checker.Last is { Status: UpdateStatus.Failed, Error: "GitHub ответил 500" } && UpdateCheck.ShowsDot(checker.Found, installed), "transition: re-check failed -> error recorded, found version and dot kept");
+clock = clock.AddMinutes(30);
+await checker.AutoCheckAsync(autoOn, installed, default);
+Check(github.Requests == 2, "after a failure: no retry within an hour");
+clock = clock.AddMinutes(31);
+github.Throw(new HttpRequestException("offline"));
+await checker.AutoCheckAsync(autoOn, installed, default);
+Check(github.Requests == 3 && checker.Last?.Error == "нет связи с GitHub" && UpdateCheck.ShowsDot(checker.Found, installed), "no network: retried after an hour, dot kept");
+
+// 3. A successful check finds no newer version any more (e.g. the release was withdrawn): the dot goes.
+clock = clock.AddHours(2);
+github.Reply(Release("v1.1.15.0"));
+await checker.AutoCheckAsync(autoOn, installed, default);
+Check(checker.Last?.Status == UpdateStatus.NoUpdate && checker.Found is null && !UpdateCheck.ShowsDot(checker.Found, installed), "transition: successful check without a newer version -> dot gone");
+
+// 4. The installed version already equals the found one (the user updated): no dot, no request needed.
+var found = UpdateCheck.Evaluate(Release("v1.1.20.0"), installed, now);
+Check(UpdateCheck.ShowsDot(found, installed) && !UpdateCheck.ShowsDot(found, new Version(1, 1, 20, 0)), "transition: installed version equals the found one -> no dot");
+
+// Manual check: always asks, also when the automatic check is off and the last answer is fresh.
+var manualBefore = github.Requests;
+github.Reply(Release("v1.1.15.0"));
+var manual = await checker.CheckNowAsync(installed);
+Check(github.Requests == manualBefore + 1 && manual.Text == "Обновлений нет (последний релиз 1.1.15.0)", "'Check now' always asks GitHub and returns a visible result");
+github.Fail(System.Net.HttpStatusCode.Forbidden);
+Check((await checker.CheckNowAsync(installed)).Text == "Не удалось проверить: GitHub ответил 403", "'Check now' error is returned as text (shown regardless of diagnostics)");
+
+// --- Automatic check: saved setting vs draft, without restarting WidBar ---
+var later = clock.AddDays(10);
+Check(!new AutoCheckPolicy(SavedOff).MayStart(later), "saved off: no automatic request, also right at start");
+Check(new AutoCheckPolicy(SavedOn).MayStart(later) && autoOn.MayStart(later), "saved on (or clean install): may start");
+var policy = new AutoCheckPolicy(SavedOn);
+policy.OnSettingsOpened();
+policy.OnSettingsJson(SavedOff);
+Check(!policy.MayStart(later), "settings window open: nothing starts while the switch is a draft");
+policy.OnSettingsJson(SavedOn);                 // Cancel hands the original back
+policy.OnSettingsClosed(later);
+Check(!policy.MayStart(later.AddSeconds(5)) && policy.MayStart(later.AddSeconds(11)), "Cancel: original 'on' restored after the settle time");
+policy.OnSettingsOpened();
+policy.OnSettingsJson(SavedOff);                // the user switches off and clicks Save
+policy.OnSettingsClosed(later);
+Check(!policy.MayStart(later.AddMinutes(1)) && !policy.MayStart(later.AddDays(3)), "saved off: no new background request afterwards, without a WidBar restart");
+policy.OnSettingsOpened();
+policy.OnSettingsJson(SavedOn);                 // draft 'on' while the saved state is 'off'
+Check(!policy.MayStart(later.AddDays(3)), "draft 'on' does not start a request before Save");
+
+// A request already sent finishes; no new one starts after 'off' is saved.
+var slow = new FakeGitHub();
+var release = new TaskCompletionSource();
+slow.Hold(release.Task, Release("v1.1.20.0"));
+var slowChecker = new UpdateChecker(slow, () => clock);
+var slowPolicy = new AutoCheckPolicy(SavedOn);
+var inFlight = slowChecker.AutoCheckAsync(slowPolicy, installed, default);
+Check(slow.Requests == 1 && !inFlight.IsCompleted, "request sent and waiting for GitHub");
+slowPolicy.OnSettingsOpened();
+slowPolicy.OnSettingsJson(SavedOff);
+slowPolicy.OnSettingsClosed(clock);
+release.SetResult();
+await inFlight;
+Check(slowChecker.Found?.Latest == new Version(1, 1, 20, 0), "the request already sent completes normally");
+clock = clock.AddDays(2);
+await slowChecker.AutoCheckAsync(slowPolicy, installed, default);
+Check(slow.Requests == 1, "after saving 'off' no new request is started");
+
+// --- Several widget instances share one checker, each with its own setting ---
+var sharedGitHub = new FakeGitHub();
+var sharedChecker = new UpdateChecker(sharedGitHub, () => clock);
+var instanceOff = new AutoCheckPolicy(SavedOff);
+var instanceOn1 = new AutoCheckPolicy(null);
+var instanceOn2 = new AutoCheckPolicy(SavedOn);
+await sharedChecker.AutoCheckAsync(instanceOff, installed, default);
+Check(sharedGitHub.Requests == 0, "instance with automatic check off does not start one itself");
+sharedGitHub.Reply(Release("v1.1.20.0"));
+await Task.WhenAll(sharedChecker.AutoCheckAsync(instanceOn1, installed, default), sharedChecker.AutoCheckAsync(instanceOn2, installed, default));
+Check(sharedGitHub.Requests == 1, "two instances starting together make one request");
+await sharedChecker.AutoCheckAsync(instanceOff, installed, default);
+Check(sharedGitHub.Requests == 1 && UpdateCheck.ShowsDot(sharedChecker.Found, installed), "the 'off' instance still starts nothing, but sees the shared result");
+sharedGitHub.Reply(Release("v1.1.20.0"));
+await sharedChecker.CheckNowAsync(installed);
+Check(sharedGitHub.Requests == 2, "manual check stays available in the 'off' instance");
+Directory.Delete(stateDir, recursive: true);
 Console.WriteLine("All checks passed.");
+
+// GitHub stand-in: answers queued in order; an unexpected request fails the test.
+sealed class FakeGitHub : HttpMessageHandler
+{
+    private readonly Queue<Func<Task<HttpResponseMessage>>> _replies = new();
+    private int _requests;
+
+    public int Requests => _requests;
+    public string? LastUrl { get; private set; }
+    public string? LastUserAgent { get; private set; }
+
+    public void Reply(string json) => _replies.Enqueue(() => Task.FromResult(Ok(json)));
+    public void Fail(System.Net.HttpStatusCode code) => _replies.Enqueue(() => Task.FromResult(new HttpResponseMessage(code)));
+    public void Throw(Exception e) => _replies.Enqueue(() => Task.FromException<HttpResponseMessage>(e));
+    public void Hold(Task until, string json) => _replies.Enqueue(async () => { await until; return Ok(json); });
+
+    private static HttpResponseMessage Ok(string json) =>
+        new(System.Net.HttpStatusCode.OK) { Content = new StringContent(json) };
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+    {
+        Interlocked.Increment(ref _requests);
+        LastUrl = request.RequestUri?.ToString();
+        LastUserAgent = request.Headers.UserAgent.ToString();
+        if (_replies.Count == 0)
+            throw new InvalidOperationException("FAILED: unexpected request to GitHub");
+        return _replies.Dequeue()();
+    }
+}

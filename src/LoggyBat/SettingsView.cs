@@ -41,8 +41,16 @@ internal sealed class SettingsView
         }
     }
 
-    public static UIElement Create(IWidgetSettingsContext ctx, IReadOnlyList<DeviceReading> current, Version? installed) =>
-        new SettingsView(ctx, current, installed).Build();
+    // onOpened/onClosed: the window is shown / closed (Save or Cancel), for the automatic check policy.
+    public static UIElement Create(
+        IWidgetSettingsContext ctx, IReadOnlyList<DeviceReading> current, Version? installed,
+        Action onOpened, Action onClosed)
+    {
+        var view = (FrameworkElement)new SettingsView(ctx, current, installed).Build();
+        view.Loaded += (_, _) => onOpened();
+        view.Unloaded += (_, _) => onClosed();
+        return view;
+    }
 
     private UIElement Build()
     {
@@ -117,7 +125,7 @@ internal sealed class SettingsView
     // version, and its result is always shown (also errors, whatever the diagnostics switch says).
     private UIElement CheckNowRow()
     {
-        var result = Text(Updates.Last is { } last ? Describe(last) : "Ещё не проверялось");
+        var result = Text(UpdateChecker.Shared.Last is { } last ? Describe(last) : "Ещё не проверялось");
         var button = new Button { Content = "Проверить сейчас", IsEnabled = _installed is not null };
         button.Click += async (_, _) =>
         {
@@ -128,7 +136,7 @@ internal sealed class SettingsView
             result.Text = "Проверка…";
             try
             {
-                result.Text = Describe(await Updates.CheckNowAsync(installed));
+                result.Text = Describe(await UpdateChecker.Shared.CheckNowAsync(installed));
             }
             catch (Exception e)
             {

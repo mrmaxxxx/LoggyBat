@@ -22,6 +22,7 @@ public sealed class MainPlugin :
     private readonly GHubClient _ghub = new();
     private readonly CancellationTokenSource _stop = new();
     private Task? _updateLoop;
+    private AutoCheckPolicy? _autoCheck;
     private DispatcherQueue? _ui;
     private StackPanel? _preview;
     private StackPanel? _flyoutList;
@@ -43,11 +44,12 @@ public sealed class MainPlugin :
     public override WidgetFlyoutBackdrop FlyoutBackdrop =>
         WidgetFlyoutBackdrop.Acrylic;
 
-    private static bool ShowDot => Installed is { } v && UpdateCheck.ShowsDot(Updates.Found, v);
+    private static bool ShowDot => Installed is { } v && UpdateCheck.ShowsDot(UpdateChecker.Shared.Found, v);
 
     public override async Task InitializeAsync(IWidgetContext context)
     {
         _settings = WidgetSettings.Parse(context.SettingsJson);
+        _autoCheck = new AutoCheckPolicy(context.SettingsJson);
         await base.InitializeAsync(context);
         context.PreviewVisibilityChanged += OnPreviewVisibilityChanged;
         _ghub.Changed += OnGHubChanged;
@@ -56,24 +58,23 @@ public sealed class MainPlugin :
 
         if (Installed is { } installed)
         {
-            Updates.Load(context.DataDirectory);
-            Updates.Changed += OnUpdatesChanged;
-            _updateLoop = UpdateLoopAsync(installed, _stop.Token);
+            UpdateChecker.Shared.Load(context.DataDirectory);
+            UpdateChecker.Shared.Changed += OnUpdatesChanged;
+            _updateLoop = UpdateLoopAsync(installed, _autoCheck, _stop.Token);
         }
     }
 
-    // Reads the SAVED setting (Context.SettingsJson), never the draft: switching automatic checks
-    // on or off in the settings window takes effect only after Save. Off means no request at all,
-    // also not at start.
-    private async Task UpdateLoopAsync(Version installed, CancellationToken ct)
+    // Every 10 minutes asks the policy whether this instance may start a check (see AutoCheckPolicy:
+    // never while the settings window is open, never when switched off - also not at start); the
+    // checker then asks GitHub only if its last answer is old enough.
+    private static async Task UpdateLoopAsync(Version installed, AutoCheckPolicy policy, CancellationToken ct)
     {
         try
         {
             while (true)
             {
-                if (WidgetSettings.Parse(Context?.SettingsJson).AutoUpdateCheck)
-                    await Updates.CheckIfDueAsync(installed, ct);
-                await Task.Delay(TimeSpan.FromHours(1), ct);
+                await UpdateChecker.Shared.AutoCheckAsync(policy, installed, ct);
+                await Task.Delay(TimeSpan.FromMinutes(10), ct);
             }
         }
         catch (OperationCanceledException)
@@ -236,7 +237,7 @@ public sealed class MainPlugin :
     // A found newer release: message and a link to its page. Nothing is downloaded or installed.
     private void AddUpdateNotice(StackPanel list)
     {
-        if (ShowDot && Updates.Found is { Url: { } url, Latest: { } latest })
+        if (ShowDot && UpdateChecker.Shared.Found is { Url: { } url, Latest: { } latest })
         {
             var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 10, 0, 0) };
             head.Children.Add(new Ellipse { Width = 8, Height = 8, Fill = DotBrush, VerticalAlignment = VerticalAlignment.Center });
@@ -250,20 +251,24 @@ public sealed class MainPlugin :
             notice.Children.Add(link);
             list.Children.Add(notice);
         }
-        else if (_settings.Diagnostics && Updates.Last is { Status: UpdateStatus.Failed } failed)
+        else if (_settings.Diagnostics && UpdateChecker.Shared.Last is { Status: UpdateStatus.Failed } failed)
         {
             list.Children.Add(TextLine($"Проверка обновлений: {failed.Text}"));
         }
     }
 
     public UIElement? CreateSettingsContent(IWidgetSettingsContext ctx) =>
-        SettingsView.Create(ctx, _ghub.Devices, Installed);
+        SettingsView.Create(
+            ctx, _ghub.Devices, Installed,
+            onOpened: () => _autoCheck?.OnSettingsOpened(),
+            onClosed: () => _autoCheck?.OnSettingsClosed(DateTimeOffset.Now));
 
     // Every edit in the settings window, and the original JSON again on Cancel: only the look
     // changes here, nothing is saved, requested or started.
     public override void OnSettingsDraftChanged(string json)
     {
         _settings = WidgetSettings.Parse(json);
+        _autoCheck?.OnSettingsJson(json);
         UpdateText();
         Context?.RequestPreviewRefresh();
     }
@@ -318,7 +323,7 @@ public sealed class MainPlugin :
             Context.PreviewVisibilityChanged -= OnPreviewVisibilityChanged;
 
         _ghub.Changed -= OnGHubChanged;
-        Updates.Changed -= OnUpdatesChanged;
+        UpdateChecker.Shared.Changed -= OnUpdatesChanged;
         _stop.Cancel();
         if (_updateLoop is not null)
             await _updateLoop;
