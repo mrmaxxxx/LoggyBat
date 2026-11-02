@@ -10,7 +10,18 @@ LoggyBat is not a separate panel and not a replacement for WidBar. It is a widge
 [WidBar](https://apps.microsoft.com/detail/9PKLDNM83TP9) app puts it on the Windows 11 taskbar, and it
 gets the battery levels from a running Logitech G HUB. You need **WidBar** and a **running Logitech G HUB**.
 
-<img src="docs/images/widget-taskbar.png" width="420" alt="LoggyBat on the WidBar taskbar: mouse 88%, headset 69%, flyout open with the G HUB response time">
+<img src="docs/images/widget-taskbar.png" width="480" alt="LoggyBat on the WidBar taskbar: mouse 47%, headset 94% charging; the widget window shows both devices with their charge bars">
+
+## Features
+
+- **Battery on the taskbar.** An icon and the charge of up to three Logitech devices that G HUB reports a
+  battery level for; an orange bolt while a device is charging.
+- **Widget window «Шкалы».** Every device with its icon, name, charge and a turquoise bar.
+- **Settings** (WidBar's gear): how many devices the taskbar shows, which ones and in what order.
+- **Update check.** A red dot and a link to the new release when one is out; **Check now** in the
+  settings with its result right below it. The automatic check can be switched off. Nothing is
+  downloaded or installed automatically.
+- **Light and dark Windows theme.**
 
 ## Requirements
 
@@ -62,7 +73,7 @@ A standalone `.msix` is not offered as a separate installation method.
 ## What it shows
 
 - **Taskbar:** an icon and the charge for each device (`92%`), an orange bolt while it is charging, `—`
-  when there is no charge.
+  when there is no charge. The icons have the same colour as the charge text.
 - **Flyout:** every device with its icon, name, charge and a turquoise bar; the orange bolt while
   charging; an empty bar and `—` when there is no charge. Unknown device types get an adapter icon.
 - A red dot on the right of the taskbar part when a newer release is found (see *Update check*).
