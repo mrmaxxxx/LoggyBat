@@ -48,9 +48,10 @@ their own license terms (see the Windows ML `ThirdPartyNotices.txt` in the `Noti
 **6. Data and network connections.** Based on a review of its source code, LoggyBat's own code:
 - connects to Logitech G HUB on the same computer (`ws://localhost:9010`) to read the battery levels;
 - checks for a new version of LoggyBat by sending a request to GitHub
-  (`https://api.github.com/repos/mrmaxxxx/LoggyBat/releases/latest`): automatically, at most once a day,
-  unless you switch this off, and whenever you click "Проверить сейчас" (Check now) in the widget's
-  settings. GitHub receives the usual data of such a request, including your computer's IP address, and
+  (`https://api.github.com/repos/mrmaxxxx/LoggyBat/releases/latest`): automatically, unless you switch
+  this off — after a successful check, at most once a day; after a failed attempt, the next attempt no
+  earlier than one hour later — and whenever you click "Проверить сейчас" (Check now) in the widget's
+  settings, regardless of these intervals. GitHub receives the usual data of such a request, including your computer's IP address, and
   the User-Agent `LoggyBat/<version>`; no information about your devices is sent. LoggyBat only reads the
   version and the page address of the latest release; it does not download or install anything.
   Automatic checks are on by default and can be switched off in the widget's settings ("Проверять
@@ -115,9 +116,10 @@ WebView2, WidBar.SDK и части LoggyBat, взятые из шаблона в
 - соединяется с Logitech G HUB на этом же компьютере (`ws://localhost:9010`), чтобы получать заряд
   устройств;
 - проверяет наличие новой версии LoggyBat, отправляя запрос в GitHub
-  (`https://api.github.com/repos/mrmaxxxx/LoggyBat/releases/latest`): автоматически, не чаще раза в
-  сутки, если вы это не выключили, и каждый раз, когда вы нажимаете «Проверить сейчас» в настройках
-  виджета. GitHub получает обычные данные такого запроса, в том числе IP-адрес вашего компьютера, и
+  (`https://api.github.com/repos/mrmaxxxx/LoggyBat/releases/latest`): автоматически, если вы это не
+  выключили, — после успешной проверки не чаще раза в сутки, после неудачной попытки следующая не
+  раньше чем через час, — и каждый раз, когда вы нажимаете «Проверить сейчас» в настройках виджета,
+  независимо от этих интервалов. GitHub получает обычные данные такого запроса, в том числе IP-адрес вашего компьютера, и
   User-Agent `LoggyBat/<версия>`; сведения о ваших устройствах не передаются. LoggyBat только читает
   номер версии и адрес страницы последнего релиза; он ничего не скачивает и не устанавливает.
   Автоматическая проверка включена по умолчанию и выключается в настройках виджета («Проверять

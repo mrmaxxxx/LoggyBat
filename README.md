@@ -80,8 +80,9 @@ automatically** — you install the update kit yourself.
 
 To find out, LoggyBat asks GitHub for the latest published release
 (`api.github.com/repos/mrmaxxxx/LoggyBat/releases/latest`). The automatic check is **on by default**,
-runs at most once a day and can be switched off in the settings; while it is off, LoggyBat sends no
-request to GitHub unless you click **Check now**. GitHub receives the usual data of a web request,
+asks again no earlier than a day after a successful check and no earlier than an hour after a failed
+attempt, and can be switched off in the settings; while it is off, LoggyBat sends no request to GitHub
+unless you click **Check now**. **Check now** asks immediately, regardless of these intervals. GitHub receives the usual data of a web request,
 including your IP address, and `LoggyBat/<version>` as the User-Agent; nothing about your devices is
 sent. Details: [TERMS.md](TERMS.md), section 6.
 
