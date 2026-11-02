@@ -1,6 +1,6 @@
 # LoggyBat — Terms of Use / Условия использования
 
-Terms version: 1 (2026-10-31)
+Terms version: 2 (2026-11-02)
 
 The English text is the primary version. The Russian text is a translation; if they differ, the
 English text prevails. / Основной текст — английский. Русский текст — перевод; при расхождении
@@ -45,8 +45,23 @@ components are determined by those licenses. Nothing in these terms limits any r
 the license of a third-party component. Third-party materials included in Windows ML are subject to
 their own license terms (see the Windows ML `ThirdPartyNotices.txt` in the `Notices` folder).
 
-**6. Data.** Based on a review of its source code, LoggyBat's own code connects only to Logitech G HUB
-on the same computer (`ws://localhost:9010`) and writes its log file on the same computer. The behavior
+**6. Data and network connections.** Based on a review of its source code, LoggyBat's own code:
+- connects to Logitech G HUB on the same computer (`ws://localhost:9010`) to read the battery levels;
+- checks for a new version of LoggyBat by sending a request to GitHub
+  (`https://api.github.com/repos/mrmaxxxx/LoggyBat/releases/latest`): automatically, at most once a day,
+  unless you switch this off, and whenever you click "Проверить сейчас" (Check now) in the widget's
+  settings. GitHub receives the usual data of such a request, including your computer's IP address, and
+  the User-Agent `LoggyBat/<version>`; no information about your devices is sent. LoggyBat only reads the
+  version and the page address of the latest release; it does not download or install anything.
+  Automatic checks are on by default and can be switched off in the widget's settings ("Проверять
+  обновления автоматически", check for updates automatically); while they are off, LoggyBat sends no
+  requests to GitHub unless you click "Check now". GitHub's handling of the request is governed by the
+  GitHub General Privacy Statement:
+  https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement;
+- writes its log file and the result of the last update check on the same computer. The widget's
+  settings are stored by WidBar.
+
+The behavior
 of the third-party components and libraries included in LoggyBat has not been reviewed by the author of
 LoggyBat; it is governed by their providers' terms. For Microsoft components, see the Microsoft privacy
 statement: https://aka.ms/privacy.
@@ -96,8 +111,23 @@ WebView2, WidBar.SDK и части LoggyBat, взятые из шаблона в
 предоставленные вам лицензией стороннего компонента. Сторонние материалы в составе Windows ML
 подчиняются своим лицензиям (см. `ThirdPartyNotices.txt` Windows ML в папке `Notices`).
 
-**6. Данные.** По результатам чтения исходного кода собственный код LoggyBat соединяется только с
-Logitech G HUB на этом же компьютере (`ws://localhost:9010`) и пишет файл журнала на этом же компьютере.
+**6. Данные и сетевые подключения.** По результатам чтения исходного кода собственный код LoggyBat:
+- соединяется с Logitech G HUB на этом же компьютере (`ws://localhost:9010`), чтобы получать заряд
+  устройств;
+- проверяет наличие новой версии LoggyBat, отправляя запрос в GitHub
+  (`https://api.github.com/repos/mrmaxxxx/LoggyBat/releases/latest`): автоматически, не чаще раза в
+  сутки, если вы это не выключили, и каждый раз, когда вы нажимаете «Проверить сейчас» в настройках
+  виджета. GitHub получает обычные данные такого запроса, в том числе IP-адрес вашего компьютера, и
+  User-Agent `LoggyBat/<версия>`; сведения о ваших устройствах не передаются. LoggyBat только читает
+  номер версии и адрес страницы последнего релиза; он ничего не скачивает и не устанавливает.
+  Автоматическая проверка включена по умолчанию и выключается в настройках виджета («Проверять
+  обновления автоматически»); пока она выключена, LoggyBat не отправляет запросов в GitHub, если вы не
+  нажмёте «Проверить сейчас». Обработка запроса GitHub регулируется заявлением GitHub о
+  конфиденциальности (GitHub General Privacy Statement):
+  https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement;
+- пишет файл журнала и результат последней проверки обновлений на этом же компьютере. Настройки
+  виджета хранит WidBar.
+
 Поведение сторонних компонентов и библиотек в составе LoggyBat автором LoggyBat не проверялось; оно
 определяется условиями их поставщиков. Для компонентов Microsoft см. заявление Microsoft
 о конфиденциальности: https://aka.ms/privacy.

@@ -57,6 +57,34 @@ If LoggyBat is already installed, use the **update kit** (`LoggyBat-update-x64-<
 
 A standalone `.msix` is not offered as a separate installation method.
 
+## Settings
+
+Open the flyout and click WidBar's gear (or *Configure* in WidBar). WidBar saves the settings with
+**Save**; **Cancel** brings back the previous look.
+
+- **How many devices** the taskbar shows: 1, 2 (default) or 3.
+- **Which devices and in what order.** Nothing ticked (default) = automatic: mouse, headset, keyboard,
+  microphone, others. A ticked device keeps its place while it is off: the taskbar shows `—` and no other
+  device moves in. Devices are remembered by model, because G HUB gives no permanent id for a single
+  unit: two identical devices are ticked and moved together, and each is still shown separately with its
+  own charge.
+- **Diagnostics** in the flyout (off by default): the time G HUB answered and the reason for `—` under
+  each device.
+- **Updates:** the installed version, **Проверить сейчас** (Check now) and the automatic check.
+
+## Update check
+
+LoggyBat can tell you that a new version is out: a red dot appears on the right of the widget and the
+flyout shows the version with a link to its release page. **Nothing is downloaded or installed
+automatically** — you install the update kit yourself.
+
+To find out, LoggyBat asks GitHub for the latest published release
+(`api.github.com/repos/mrmaxxxx/LoggyBat/releases/latest`). The automatic check is **on by default**,
+runs at most once a day and can be switched off in the settings; while it is off, LoggyBat sends no
+request to GitHub unless you click **Check now**. GitHub receives the usual data of a web request,
+including your IP address, and `LoggyBat/<version>` as the User-Agent; nothing about your devices is
+sent. Details: [TERMS.md](TERMS.md), section 6.
+
 ## Compatibility
 
 Tested devices:
@@ -72,7 +100,9 @@ do not appear in LoggyBat.
 - Without a running G HUB the widget shows `—`; the flyout tells why.
 - Right after the widget or a device starts, G HUB may not report the charge for a few seconds
   (up to ~20 s); `—` is shown meanwhile.
-- The taskbar shows at most two devices (mouse, headset, keyboard, others); the flyout shows all.
+- The taskbar shows up to three devices (set in the settings); the flyout shows all.
+- The microphone icon is assigned to G HUB's device type `MICROPHONE`, which has not been seen on a real
+  device yet; devices of unknown types get 🔋.
 - The time in the flyout is when G HUB answered, not when the battery was measured.
 - The percentage is taken from G HUB as is; a 1 % difference from the G HUB window was observed once,
   cause unknown.
