@@ -134,6 +134,7 @@ public sealed class MainPlugin :
             return;
 
         _flyoutList.Children.Clear();
+        _flyoutList.Spacing = _settings.Diagnostics ? 16 : 6;
         if (DeviceList.FlyoutMessage(_ghub.Devices, _ghub.Problem) is { } message)
         {
             _flyoutList.Children.Add(new TextBlock { Text = message, FontSize = 16, TextWrapping = TextWrapping.Wrap });
@@ -153,7 +154,8 @@ public sealed class MainPlugin :
 
             var entry = new StackPanel();
             entry.Children.Add(head);
-            entry.Children.Add(new TextBlock { Text = detail, FontSize = 16, TextWrapping = TextWrapping.Wrap });
+            if (_settings.Diagnostics)
+                entry.Children.Add(new TextBlock { Text = detail, FontSize = 16, TextWrapping = TextWrapping.Wrap });
             _flyoutList.Children.Add(entry);
         }
     }

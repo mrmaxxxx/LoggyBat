@@ -171,4 +171,9 @@ var twinsPicked = WidgetSettings.Default with { Count = 3, Devices = [new Chosen
 var twinsOneEmpty = twinsUneven.Select(r => r.Id == "dev5" ? DeviceList.WithProblem(r, "x") : r).ToList();
 Check(DeviceList.PreviewText(twinsOneEmpty, twinsPicked, now) == "🖱 92%   🖱 —", "two same models: both shown separately, charges not merged");
 Check(DeviceList.FlyoutRows(twinsOneEmpty, now, twinsPicked.Devices).Select(x => x.Line).SequenceEqual(["G502 X PLUS (1): 92%", "G502 X PLUS (2): —"]), "two same models in the flyout: two rows");
+// --- Diagnostics off (default): names and charge only ---
+Check(DeviceList.FlyoutText(mine, null, now, null, diagnostics: false) == "🖱 G502 X PLUS: 92%\n🎧 PRO X WIRELESS: 69% ⚡", "diagnostics off: no answer time");
+Check(DeviceList.FlyoutText(off1, null, now.AddSeconds(2), null, diagnostics: false) == "🖱 G502 X PLUS: —\n🎧 PRO X WIRELESS: 92%", "diagnostics off: no reason under '—'");
+Check(DeviceList.FlyoutText([], "G HUB не запущен", now, null, diagnostics: false) == "Нет данных: G HUB не запущен", "diagnostics off: the whole-connection state is still shown");
+Check(DeviceList.FlyoutText(mine, null, now, null, diagnostics: true) == DeviceList.FlyoutText(mine, null, now), "diagnostics on: as before");
 Console.WriteLine("All checks passed.");

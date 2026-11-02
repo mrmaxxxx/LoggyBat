@@ -195,9 +195,18 @@ public static class DeviceList
             .Select(x => (x.Row.Type, $"{x.Label}: {Percentage(x.Row, now)}", Status(x.Row, now)))
             .ToList();
 
-    public static string FlyoutText(IReadOnlyList<DeviceReading> rows, string? clientProblem, DateTimeOffset now) =>
+    // With diagnostics off only names and charge are shown; the detail lines (G HUB answer time,
+    // the exact reason for "—") are left out.
+    public static string FlyoutText(
+        IReadOnlyList<DeviceReading> rows, string? clientProblem, DateTimeOffset now,
+        IReadOnlyList<ChosenDevice>? chosen, bool diagnostics) =>
         FlyoutMessage(rows, clientProblem)
-        ?? string.Join("\n\n", FlyoutRows(rows, now).Select(x => $"{Icon(x.Type)} {x.Line}\n{x.Detail}"));
+        ?? (diagnostics
+            ? string.Join("\n\n", FlyoutRows(rows, now, chosen).Select(x => $"{Icon(x.Type)} {x.Line}\n{x.Detail}"))
+            : string.Join("\n", FlyoutRows(rows, now, chosen).Select(x => $"{Icon(x.Type)} {x.Line}")));
+
+    public static string FlyoutText(IReadOnlyList<DeviceReading> rows, string? clientProblem, DateTimeOffset now) =>
+        FlyoutText(rows, clientProblem, now, null, diagnostics: true);
 
     // Receive time only. Kept short: the flyout is narrow.
     private static string Status(DeviceReading r, DateTimeOffset now) =>

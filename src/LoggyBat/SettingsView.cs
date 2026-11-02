@@ -69,6 +69,15 @@ internal sealed class SettingsView
             "отмечаются и переставляются вместе, а на панели и в окне каждое показывается отдельно, " +
             "со своим зарядом."));
 
+        panel.Children.Add(Header("Окно виджета"));
+        var diagnostics = new ToggleSwitch
+        {
+            Header = "Диагностика: время ответа G HUB и причина «—» под каждым устройством",
+            IsOn = _settings.Diagnostics
+        };
+        diagnostics.Toggled += (_, _) => Save(_settings with { Diagnostics = diagnostics.IsOn });
+        panel.Children.Add(diagnostics);
+
         var root = new StackPanel { Spacing = 16 };
         if (_settings.FromNewerVersion)
         {
