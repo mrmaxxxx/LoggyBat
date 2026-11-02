@@ -35,11 +35,19 @@ function Request-TermsConsent($terms) {
     return ("$answer".Trim() -in 'yes', 'да')
 }
 
+# Every step stops on an error, whatever the caller's $ErrorActionPreference, and the result is read
+# back: success is reported only when the registry really holds this version and hash. An existing key
+# is kept as it is (New-Item -Force would empty it) and only these three values are written.
 function Save-TermsAcceptance($terms) {
-    New-Item -Path $script:TermsKey -Force | Out-Null
-    Set-ItemProperty -Path $script:TermsKey -Name TermsVersion -Value $terms.Version
-    Set-ItemProperty -Path $script:TermsKey -Name TermsSha256 -Value $terms.Sha256
-    Set-ItemProperty -Path $script:TermsKey -Name AcceptedUtc -Value ([DateTime]::UtcNow.ToString('o'))
+    if (-not (Test-Path $script:TermsKey)) { New-Item -Path $script:TermsKey -ErrorAction Stop | Out-Null }
+    Set-ItemProperty -Path $script:TermsKey -Name TermsVersion -Value $terms.Version -ErrorAction Stop
+    Set-ItemProperty -Path $script:TermsKey -Name TermsSha256 -Value $terms.Sha256 -ErrorAction Stop
+    Set-ItemProperty -Path $script:TermsKey -Name AcceptedUtc -Value ([DateTime]::UtcNow.ToString('o')) -ErrorAction Stop
+    $saved = Get-ItemProperty -Path $script:TermsKey -ErrorAction Stop
+    if ("$($saved.TermsVersion)" -ne "$($terms.Version)" -or "$($saved.TermsSha256)" -ne $terms.Sha256) {
+        throw "The acceptance of the terms was not saved: the registry holds version '$($saved.TermsVersion)'. / Принятие условий не сохранено: в реестре версия '$($saved.TermsVersion)'."
+    }
+    Write-Host "Acceptance of terms version $($terms.Version) saved ($($script:TermsKey)). / Принятие условий версии $($terms.Version) сохранено."
 }
 
 function Write-Declined {

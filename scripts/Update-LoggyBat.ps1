@@ -2,7 +2,9 @@
 #   right-click Update-LoggyBat.ps1 > Run with PowerShell
 #   or: powershell -ExecutionPolicy Bypass -File .\Update-LoggyBat.ps1 [-AcceptTerms]
 # Checks first, changes nothing until all pass:
-#   - LoggyBat is already installed (otherwise use the first-install kit) and is older than this package;
+#   - LoggyBat is already installed (otherwise use the first-install kit) and is older than this package.
+#     If this version (or a newer one) is already installed but the terms in this kit were not accepted
+#     yet, the script only shows them and records the consent; nothing is installed;
 #   - the package signature is valid and its publisher matches the installed LoggyBat;
 #   - WidBar is closed (Windows cannot replace the files of a running widget);
 #   - the terms of use: shown with a request for explicit consent unless this version was accepted before.
@@ -42,7 +44,17 @@ if (-not $installed) {
     Stop-WithMessage 'LoggyBat не установлен. Для первой установки используйте комплект первой установки (Install-LoggyBat.ps1).' `
         'LoggyBat is not installed. Use the first-install kit (Install-LoggyBat.ps1) for a first installation.' 1
 }
+$terms = Get-TermsInfo $PSScriptRoot
 if ([version]$installed[0].Version -ge [version]$id.Version) {
+    if (-not (Test-TermsAccepted $terms)) {
+        # Nothing to install, but the terms of this kit can still be read and accepted.
+        "Version $($installed[0].Version) is installed; this package $($id.Version) is not newer. The terms of use version $($terms.Version) in this kit were not accepted yet."
+        "Установлена версия $($installed[0].Version); этот пакет $($id.Version) не новее. Условия версии $($terms.Version) из этого комплекта ещё не приняты."
+        if (-not $AcceptTerms -and -not (Request-TermsConsent $terms)) { Write-Declined; exit 2 }
+        Save-TermsAcceptance $terms
+        'Nothing was installed. / Ничего не установлено.'
+        exit 0
+    }
     Stop-WithMessage "Установлена версия $($installed[0].Version); этот пакет $($id.Version) не новее." `
         "Version $($installed[0].Version) is installed; this package $($id.Version) is not newer." 0
 }
@@ -55,7 +67,6 @@ if (Get-Process -Name 'WidBar', 'LoggyBat' -ErrorAction SilentlyContinue) {
         'WidBar is running. Close WidBar completely (tray icon > Exit) and run Update-LoggyBat.ps1 again.' 3
 }
 
-$terms = Get-TermsInfo $PSScriptRoot
 $newConsent = -not (Test-TermsAccepted $terms)
 if ($newConsent -and -not $AcceptTerms -and -not (Request-TermsConsent $terms)) { Write-Declined; exit 2 }
 if (-not $newConsent) { "Terms of use version $($terms.Version) were accepted before. / Условия версии $($terms.Version) уже приняты." }
