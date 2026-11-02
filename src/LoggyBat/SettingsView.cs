@@ -24,6 +24,8 @@ internal sealed class SettingsView
 
     private readonly Version? _installed;
 
+    private string InstanceTag => DeviceList.ShortId($"{_ctx.InstanceId}");
+
     private SettingsView(IWidgetSettingsContext ctx, IReadOnlyList<DeviceReading> current, Version? installed)
     {
         _ctx = ctx;
@@ -136,7 +138,7 @@ internal sealed class SettingsView
             result.Text = "Проверка…";
             try
             {
-                result.Text = Describe(await UpdateChecker.Shared.CheckNowAsync(installed));
+                result.Text = Describe(await UpdateChecker.Shared.CheckNowAsync(installed, InstanceTag));
             }
             catch (Exception e)
             {

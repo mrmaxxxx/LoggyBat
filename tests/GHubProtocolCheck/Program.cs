@@ -301,6 +301,14 @@ sharedGitHub.Reply(Release("v1.1.20.0"));
 await sharedChecker.CheckNowAsync(installed);
 Check(sharedGitHub.Requests == 2, "manual check stays available in the 'off' instance");
 Directory.Delete(stateDir, recursive: true);
+// --- Diagnostics text for the log ---
+var reasons = new AutoCheckPolicy(SavedOn);
+Check(reasons.Reason(later) == AutoCheckPolicy.Allowed && new AutoCheckPolicy(SavedOff).Reason(later) == "запрещена: автопроверка выключена", "log reason: allowed / switched off");
+reasons.OnSettingsOpened();
+Check(reasons.Reason(later) == "запрещена: окно настроек открыто", "log reason: settings window open");
+reasons.OnSettingsClosed(later);
+Check(reasons.Reason(later.AddSeconds(1)) == "запрещена: пауза 10 с после закрытия окна настроек" && reasons.Enabled, "log reason: settle pause; last received value kept");
+Check(DeviceList.ShortId("0123456789abcdef") == "01234567" && DeviceList.ShortId("ab") == "ab" && DeviceList.ShortId("") == "?", "instance id shortened for the log");
 Console.WriteLine("All checks passed.");
 
 // GitHub stand-in: answers queued in order; an unexpected request fails the test.

@@ -100,6 +100,11 @@ public sealed class AutoCheckPolicy(string? savedJson)
     private bool _settingsOpen;
     private DateTimeOffset _closedAt = DateTimeOffset.MinValue;
 
+    public const string Allowed = "разрешена";
+
+    // The last automatic-check value WidBar handed over (saved at start, then every draft).
+    public bool Enabled => _enabled;
+
     public void OnSettingsJson(string json) => _enabled = WidgetSettings.Parse(json).AutoUpdateCheck;
     public void OnSettingsOpened() => _settingsOpen = true;
 
@@ -109,7 +114,14 @@ public sealed class AutoCheckPolicy(string? savedJson)
         _closedAt = now;
     }
 
-    public bool MayStart(DateTimeOffset now) => _enabled && !_settingsOpen && now - _closedAt >= Settle;
+    public bool MayStart(DateTimeOffset now) => Reason(now) == Allowed;
+
+    // Why a background check may or may not start now; written to the log.
+    public string Reason(DateTimeOffset now) =>
+        !_enabled ? "запрещена: автопроверка выключена"
+        : _settingsOpen ? "запрещена: окно настроек открыто"
+        : now - _closedAt < Settle ? "запрещена: пауза 10 с после закрытия окна настроек"
+        : Allowed;
 }
 
 // The request itself and its last result. One shared instance per process on purpose (unlike the
@@ -155,13 +167,15 @@ public sealed class UpdateChecker(HttpMessageHandler handler, Func<DateTimeOffse
 
     // One step of an instance's background loop: asks GitHub only if this instance's policy allows it
     // and the last answer is old enough (a day; an hour after a failure).
-    public Task AutoCheckAsync(AutoCheckPolicy policy, Version installed, CancellationToken ct) =>
-        policy.MayStart(clock()) ? RunAsync(installed, onlyIfDue: true, ct) : Task.CompletedTask;
+    // instance: the widget instance id, only for the log.
+    public Task AutoCheckAsync(AutoCheckPolicy policy, Version installed, CancellationToken ct, string instance = "?") =>
+        policy.MayStart(clock()) ? RunAsync(installed, onlyIfDue: true, $"автоматически, экземпляр {instance}", ct) : Task.CompletedTask;
 
     // The "Check now" button: always asks GitHub, whatever the automatic check is set to.
-    public Task<UpdateResult> CheckNowAsync(Version installed) => RunAsync(installed, onlyIfDue: false, CancellationToken.None);
+    public Task<UpdateResult> CheckNowAsync(Version installed, string instance = "?") =>
+        RunAsync(installed, onlyIfDue: false, $"вручную, экземпляр {instance}", CancellationToken.None);
 
-    private async Task<UpdateResult> RunAsync(Version installed, bool onlyIfDue, CancellationToken ct)
+    private async Task<UpdateResult> RunAsync(Version installed, bool onlyIfDue, string source, CancellationToken ct)
     {
         await _gate.WaitAsync(ct);
         try
@@ -175,6 +189,7 @@ public sealed class UpdateChecker(HttpMessageHandler handler, Func<DateTimeOffse
                     return last;
             }
 
+            Log.Write($"Проверка обновлений: запрос к GitHub начат ({source})");
             var result = await RequestAsync(installed, ct);
             Last = result;
             if (result.Status != UpdateStatus.Failed)

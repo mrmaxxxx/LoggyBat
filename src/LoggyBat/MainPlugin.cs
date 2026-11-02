@@ -56,6 +56,7 @@ public sealed class MainPlugin :
         UpdateActive();
         _ghub.Start();
 
+        Diag($"запуск: сохранённая автопроверка={_autoCheck.Enabled}; фоновая проверка {_autoCheck.Reason(DateTimeOffset.Now)}");
         if (Installed is { } installed)
         {
             UpdateChecker.Shared.Load(context.DataDirectory);
@@ -64,16 +65,27 @@ public sealed class MainPlugin :
         }
     }
 
+    // Diagnostics for the settings window and the automatic check: time (from Log), widget instance,
+    // the automatic-check value and the policy's reason. No JSON, no G HUB replies.
+    private string InstanceTag => DeviceList.ShortId($"{Context?.InstanceId}");
+
+    private void Diag(string text) => Log.Write($"Настройки [{InstanceTag}]: {text}");
+
     // Every 10 minutes asks the policy whether this instance may start a check (see AutoCheckPolicy:
     // never while the settings window is open, never when switched off - also not at start); the
     // checker then asks GitHub only if its last answer is old enough.
-    private static async Task UpdateLoopAsync(Version installed, AutoCheckPolicy policy, CancellationToken ct)
+    private async Task UpdateLoopAsync(Version installed, AutoCheckPolicy policy, CancellationToken ct)
     {
+        string? lastReason = null;
         try
         {
             while (true)
             {
-                await UpdateChecker.Shared.AutoCheckAsync(policy, installed, ct);
+                string reason = policy.Reason(DateTimeOffset.Now);
+                if (reason != lastReason)
+                    Diag($"фоновая проверка {reason}");
+                lastReason = reason;
+                await UpdateChecker.Shared.AutoCheckAsync(policy, installed, ct, InstanceTag);
                 await Task.Delay(TimeSpan.FromMinutes(10), ct);
             }
         }
@@ -258,10 +270,24 @@ public sealed class MainPlugin :
     }
 
     public UIElement? CreateSettingsContent(IWidgetSettingsContext ctx) =>
-        SettingsView.Create(
+        CreateSettingsView(ctx);
+
+    private UIElement CreateSettingsView(IWidgetSettingsContext ctx)
+    {
+        Diag($"окно настроек создано (CreateSettingsContent); автопроверка в SettingsJson окна={WidgetSettings.Parse(ctx.SettingsJson).AutoUpdateCheck}");
+        return SettingsView.Create(
             ctx, _ghub.Devices, Installed,
-            onOpened: () => _autoCheck?.OnSettingsOpened(),
-            onClosed: () => _autoCheck?.OnSettingsClosed(DateTimeOffset.Now));
+            onOpened: () =>
+            {
+                _autoCheck?.OnSettingsOpened();
+                Diag($"окно настроек Loaded; фоновая проверка {_autoCheck?.Reason(DateTimeOffset.Now)}");
+            },
+            onClosed: () =>
+            {
+                _autoCheck?.OnSettingsClosed(DateTimeOffset.Now);
+                Diag($"окно настроек Unloaded; последняя полученная автопроверка={_autoCheck?.Enabled}; фоновая проверка {_autoCheck?.Reason(DateTimeOffset.Now)}");
+            });
+    }
 
     // Every edit in the settings window, and the original JSON again on Cancel: only the look
     // changes here, nothing is saved, requested or started.
@@ -269,6 +295,8 @@ public sealed class MainPlugin :
     {
         _settings = WidgetSettings.Parse(json);
         _autoCheck?.OnSettingsJson(json);
+        var draft = WidgetSettings.Parse(json);
+        Diag($"OnSettingsDraftChanged: автопроверка={draft.AutoUpdateCheck}, version>1={draft.FromNewerVersion}; фоновая проверка {_autoCheck?.Reason(DateTimeOffset.Now)}");
         UpdateText();
         Context?.RequestPreviewRefresh();
     }

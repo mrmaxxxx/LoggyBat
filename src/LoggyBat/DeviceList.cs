@@ -84,6 +84,9 @@ public static class DeviceList
 
     public const string NotFoundProblem = "сейчас нет в G HUB";
 
+    // First 8 characters of a widget instance id, enough to tell instances apart in the log.
+    public static string ShortId(string id) => id.Length == 0 ? "?" : id[..Math.Min(8, id.Length)];
+
     // Order that never depends on charge: the models the user picked, in the picked order, then the
     // rest by type priority, name and dev-id. A picked model missing from G HUB stays as a "—" row,
     // so it keeps its place and no other device moves into it. Units of one model stay separate rows.
