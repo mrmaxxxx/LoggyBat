@@ -101,20 +101,29 @@ public static class DeviceList
             .ToList();
     }
 
+    // MOUSE and HEADSET are G HUB's deviceType strings seen on Max's PC. KEYBOARD and MICROPHONE are
+    // expected strings not yet seen on a real device (the log records every type, see GHubClient);
+    // any other type gets the neutral 🔋, so a wrong guess costs only the icon.
     public static string Icon(string type) => type switch
     {
         "MOUSE" => "🖱",
         "HEADSET" => "🎧",
         "KEYBOARD" => "⌨",
+        "MICROPHONE" => "🎤",
         _ => "🔋",
     };
+
+    // What the UI draws: U+FE0F asks for the colour emoji. 🖱 and ⌨ default to the narrow text form,
+    // and drawing the wide emoji into that narrow box is the likely cause of the clipped mouse.
+    public static string Glyph(string type) => Icon(type) + "️";
 
     private static int Priority(string type) => type switch
     {
         "MOUSE" => 0,
         "HEADSET" => 1,
         "KEYBOARD" => 2,
-        _ => 3,
+        "MICROPHONE" => 3,
+        _ => 4,
     };
 
     public static bool IsFresh(DeviceReading r, DateTimeOffset now) =>
@@ -128,35 +137,40 @@ public static class DeviceList
             ? r.Percent + "%" + (r.Charging ? " ⚡" : "")
             : "—";
 
-    // Taskbar: at most two devices; "🔋 —" while none is known.
-    public static string PreviewText(IReadOnlyList<DeviceReading> rows, DateTimeOffset now)
+    // Taskbar: at most two devices; a single "🔋 —" while none is known.
+    public static IReadOnlyList<(string Type, string Percent)> PreviewItems(IReadOnlyList<DeviceReading> rows, DateTimeOffset now)
     {
         var shown = ForDisplay(rows)
             .Take(2)
-            .Select(x => $"{Icon(x.Row.Type)} {Percentage(x.Row, now)}")
+            .Select(x => (x.Row.Type, Percentage(x.Row, now)))
             .ToList();
 
-        return shown.Count > 0 ? string.Join("   ", shown) : "🔋 —";
+        return shown.Count > 0 ? shown : [("", "—")];
     }
+
+    public static string PreviewText(IReadOnlyList<DeviceReading> rows, DateTimeOffset now) =>
+        string.Join("   ", PreviewItems(rows, now).Select(x => $"{Icon(x.Type)} {x.Percent}"));
 
     // clientProblem: why the whole connection has no data, null when G HUB answers.
-    public static string FlyoutText(IReadOnlyList<DeviceReading> rows, string? clientProblem, DateTimeOffset now)
-    {
-        if (rows.Count == 0)
+    // Returns the one-line state of the whole connection when there are no rows, otherwise null.
+    public static string? FlyoutMessage(IReadOnlyList<DeviceReading> rows, string? clientProblem) =>
+        rows.Count > 0 ? null
+        : clientProblem switch
         {
-            return clientProblem switch
-            {
-                null => "Устройства с батареей в G HUB не найдены",
-                Connecting => "Подключение к G HUB…",
-                _ => $"Нет данных: {clientProblem}",
-            };
-        }
+            null => "Устройства с батареей в G HUB не найдены",
+            Connecting => "Подключение к G HUB…",
+            _ => $"Нет данных: {clientProblem}",
+        };
 
-        return string.Join(
-            "\n\n",
-            ForDisplay(rows).Select(x =>
-                $"{Icon(x.Row.Type)} {x.Label}: {Percentage(x.Row, now)}\n{Status(x.Row, now)}"));
-    }
+    // One entry per device: "G502 X PLUS: 92%" and the detail line under it.
+    public static IReadOnlyList<(string Type, string Line, string Detail)> FlyoutRows(IReadOnlyList<DeviceReading> rows, DateTimeOffset now) =>
+        ForDisplay(rows)
+            .Select(x => (x.Row.Type, $"{x.Label}: {Percentage(x.Row, now)}", Status(x.Row, now)))
+            .ToList();
+
+    public static string FlyoutText(IReadOnlyList<DeviceReading> rows, string? clientProblem, DateTimeOffset now) =>
+        FlyoutMessage(rows, clientProblem)
+        ?? string.Join("\n\n", FlyoutRows(rows, now).Select(x => $"{Icon(x.Type)} {x.Line}\n{x.Detail}"));
 
     // Receive time only. Kept short: the flyout is narrow.
     private static string Status(DeviceReading r, DateTimeOffset now) =>

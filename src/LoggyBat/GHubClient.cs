@@ -325,7 +325,7 @@ public sealed class GHubClient : IAsyncDisposable
     {
         // Log only when the picture changes, not on every poll.
         string summary = (problem ?? "G HUB отвечает") + " | " + string.Join(
-            "; ", devices.Select(d => $"{d.Name} [{d.Id}]: {d.Problem ?? "заряд получен"}"));
+            "; ", devices.Select(d => $"{d.Name} [{d.Id}, {d.Type}]: {d.Problem ?? "заряд получен"}"));
         if (summary != _logged)
         {
             Log.Write(summary);

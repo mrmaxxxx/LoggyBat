@@ -13,8 +13,8 @@ public sealed class MainPlugin :
 {
     private readonly GHubClient _ghub = new();
     private DispatcherQueue? _ui;
-    private TextBlock? _previewText;
-    private TextBlock? _flyoutText;
+    private StackPanel? _preview;
+    private StackPanel? _flyoutList;
 
     private bool _flyoutVisible;
     private bool _disposed;
@@ -40,18 +40,17 @@ public sealed class MainPlugin :
     public override UIElement? CreatePreviewContent()
     {
         _ui ??= DispatcherQueue.GetForCurrentThread();
-        _previewText = new TextBlock
+        _preview = new StackPanel
         {
-            Text = PreviewText(),
-            FontSize = 16,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
 
         var root = new Grid { Background = null };
-        root.Children.Add(_previewText);
+        root.Children.Add(_preview);
 
+        UpdatePreview();
         UpdateActive();
         return root;
     }
@@ -59,12 +58,8 @@ public sealed class MainPlugin :
     public override UIElement? CreateFlyoutContent()
     {
         _ui ??= DispatcherQueue.GetForCurrentThread();
-        _flyoutText = new TextBlock
-        {
-            Text = FlyoutText(),
-            FontSize = 16,
-            TextWrapping = TextWrapping.Wrap
-        };
+        _flyoutList = new StackPanel { Spacing = 16 };
+        UpdateFlyout();
 
         // Same look as the former StackPanel (padding 20, gap 12); the Grid gives the
         // list a bounded height so a long list scrolls inside the fixed-size flyout.
@@ -85,7 +80,7 @@ public sealed class MainPlugin :
 
         var list = new ScrollViewer
         {
-            Content = _flyoutText,
+            Content = _flyoutList,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
         };
@@ -95,11 +90,67 @@ public sealed class MainPlugin :
         return panel;
     }
 
-    private string PreviewText() =>
-        DeviceList.PreviewText(_ghub.Devices, DateTimeOffset.Now);
+    // The icon is its own element in the emoji font, so its width is measured from the emoji itself
+    // and the glyph is not clipped (the mouse was, when it shared one TextBlock with the text).
+    private static TextBlock IconBlock(string type) => new()
+    {
+        Text = DeviceList.Glyph(type),
+        FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe UI Emoji"),
+        FontSize = 16,
+        VerticalAlignment = VerticalAlignment.Center
+    };
 
-    private string FlyoutText() =>
-        DeviceList.FlyoutText(_ghub.Devices, _ghub.Problem, DateTimeOffset.Now);
+    // Same look as the former single line "🖱 92%   🎧 69%".
+    private void UpdatePreview()
+    {
+        if (_preview is null)
+            return;
+
+        _preview.Children.Clear();
+        foreach (var (type, percent) in DeviceList.PreviewItems(_ghub.Devices, DateTimeOffset.Now))
+        {
+            var icon = IconBlock(type);
+            icon.Margin = new Thickness(_preview.Children.Count > 0 ? 14 : 0, 0, 5, 0);
+            _preview.Children.Add(icon);
+            _preview.Children.Add(new TextBlock
+            {
+                Text = percent,
+                FontSize = 16,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+        }
+    }
+
+    private void UpdateFlyout()
+    {
+        if (_flyoutList is null)
+            return;
+
+        _flyoutList.Children.Clear();
+        if (DeviceList.FlyoutMessage(_ghub.Devices, _ghub.Problem) is { } message)
+        {
+            _flyoutList.Children.Add(new TextBlock { Text = message, FontSize = 16, TextWrapping = TextWrapping.Wrap });
+            return;
+        }
+
+        foreach (var (type, line, detail) in DeviceList.FlyoutRows(_ghub.Devices, DateTimeOffset.Now))
+        {
+            // Grid, not a horizontal StackPanel: a long name must wrap inside the flyout width.
+            var head = new Grid { ColumnSpacing = 6 };
+            head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var name = new TextBlock { Text = line, FontSize = 16, TextWrapping = TextWrapping.Wrap };
+            Grid.SetColumn(name, 1);
+            head.Children.Add(IconBlock(type));
+            head.Children.Add(name);
+
+            var entry = new StackPanel();
+            entry.Children.Add(head);
+            entry.Children.Add(new TextBlock { Text = detail, FontSize = 16, TextWrapping = TextWrapping.Wrap });
+            _flyoutList.Children.Add(entry);
+        }
+    }
 
     // Comes from the G HUB loop thread; XAML may only be touched on the UI thread.
     private void OnGHubChanged() => _ui?.TryEnqueue(UpdateText);
@@ -109,11 +160,8 @@ public sealed class MainPlugin :
         if (_disposed)
             return;
 
-        if (_previewText is not null)
-            _previewText.Text = PreviewText();
-
-        if (_flyoutText is not null)
-            _flyoutText.Text = FlyoutText();
+        UpdatePreview();
+        UpdateFlyout();
     }
 
     private void UpdateActive()
@@ -148,7 +196,7 @@ public sealed class MainPlugin :
         _ghub.Changed -= OnGHubChanged;
         await _ghub.DisposeAsync();
 
-        _previewText = null;
-        _flyoutText = null;
+        _preview = null;
+        _flyoutList = null;
     }
 }

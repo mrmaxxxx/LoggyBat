@@ -78,6 +78,13 @@ Check(DeviceList.PreviewText(four, now) == "🖱 92%   🎧 92%", "3+ devices: t
 Check(DeviceList.ForDisplay(four).Select(x => x.Row.Type).SequenceEqual(["MOUSE", "HEADSET", "KEYBOARD", "SPEAKER"]), "flyout order: mouse, headset, keyboard, others");
 Check(DeviceList.FlyoutText(four, null, now).Contains("⌨ G915: 92%") && DeviceList.FlyoutText(four, null, now).Contains("🔋 Z407: 92%"), "keyboard ⌨, unknown type 🔋");
 
+// --- Icons ---
+Check(DeviceList.Icon("MICROPHONE") == "🎤" && DeviceList.Icon("SOMETHING_NEW") == "🔋" && DeviceList.Icon("") == "🔋", "microphone 🎤, unknown type 🔋");
+Check(DeviceList.Glyph("MOUSE") == "🖱️" && DeviceList.Glyph("HEADSET") == "🎧️", "UI glyph asks for the emoji form (U+FE0F)");
+Check(DeviceList.PreviewItems([], now).SequenceEqual([("", "—")]), "no devices: one neutral item");
+var mic = Poll([], [Other("dev0"), new Dev("dev1", "MICROPHONE", "Mic", "mic", "ACTIVE")], true, now, Charge92);
+Check(DeviceList.ForDisplay(mic).Select(x => x.Row.Type).SequenceEqual(["MICROPHONE", "SPEAKER"]), "microphone sorts before unknown types");
+
 // --- Two units of the same model ---
 var twins = Poll([], [Mouse("dev5"), Mouse("dev4")], true, now, Charge92);
 var twinLabels = DeviceList.ForDisplay(twins).Select(x => (x.Row.Id, x.Label)).ToList();
