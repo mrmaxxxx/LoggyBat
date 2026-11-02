@@ -79,6 +79,28 @@ public static class UpdateCheck
     public static bool ShowsDot(UpdateResult? result, Version installed) =>
         result is { Status: UpdateStatus.Available, Latest: { } latest } && latest > installed;
 
+    // What the settings window shows under "Проверить сейчас": a found update (red dot, text and the
+    // release link - the link only then), and/or a message: checking, no updates, an error, never checked.
+    // A found update stays visible when the settings are opened again; a failed later check adds its error.
+    public static (string? Available, string? Url, string? Message) SettingsStatus(
+        UpdateResult? last, UpdateResult? found, Version installed, bool checking)
+    {
+        if (checking)
+            return (null, null, "Проверка обновлений…");
+
+        bool update = ShowsDot(found, installed);
+        string? message = last switch
+        {
+            { Status: UpdateStatus.Failed, Error: var error } => $"Не удалось проверить обновления: {error}. Попробуйте позже.",
+            { Status: UpdateStatus.NoUpdate, Latest: var latest } when !update => $"Обновлений нет (последний релиз {latest})",
+            null when !update => "Обновления ещё не проверялись",
+            _ => null,
+        };
+        return update
+            ? ($"Доступна версия {found!.Latest} (у вас {installed})", found.Url, message)
+            : (null, null, message);
+    }
+
     private static string? Str(JsonElement o, string name) =>
         o.ValueKind == JsonValueKind.Object && o.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String
             ? v.GetString()

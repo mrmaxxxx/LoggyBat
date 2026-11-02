@@ -9,7 +9,8 @@ namespace LoggyBat;
 
 // The approved icons and colours of the "Шкалы" design (Max, 2026-11-03). Path data is the same as
 // docs/design/icons.svg on a 24x24 grid with 1.5 strokes; change both together. Vector paths stay
-// sharp from 16 to 30 px. The contour, track and divider colours follow the light/dark theme
+// sharp from 16 to 30 px. On the taskbar the contours use the system text colour (like the percent);
+// in the flyout and settings the contour, track and divider colours follow the light/dark theme
 // (callers pass the element's ActualTheme and redraw on ActualThemeChanged); bar and bolt do not.
 internal static class Icons
 {
@@ -48,15 +49,30 @@ internal static class Icons
     public static Color Divider(ElementTheme theme) => theme == ElementTheme.Light ? Rgb(0xE2, 0xE5, 0xE9) : Rgb(0x38, 0x3D, 0x44);
 
     // kind: DeviceList.IconKind (mouse, headset, keyboard, microphone, adapter).
+    private static string DataFor(string kind) => kind switch
+    {
+        "mouse" => Mouse,
+        "headset" => Headset,
+        "keyboard" => Keyboard,
+        "microphone" => Microphone,
+        _ => Adapter,
+    };
+
+    // Flyout and settings: the approved contour colour of the theme.
     public static FrameworkElement Device(string kind, double size, ElementTheme theme) =>
-        Make(kind switch
-        {
-            "mouse" => Mouse,
-            "headset" => Headset,
-            "keyboard" => Keyboard,
-            "microphone" => Microphone,
-            _ => Adapter,
-        }, size, stroke: Contour(theme), fill: null);
+        Make(DataFor(kind), size, stroke: Contour(theme), fill: null);
+
+    // Taskbar: the same colour as the percent text next to it - the theme's primary text colour
+    // (TextFillColorPrimaryBrush). As a ThemeResource it follows theme changes by itself.
+    public static FrameworkElement DeviceInTextColor(string kind, double size)
+    {
+        string px = size.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return (FrameworkElement)XamlReader.Load(
+            "<Viewbox xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' " +
+            $"Width='{px}' Height='{px}' VerticalAlignment='Center'><Canvas Width='24' Height='24'>" +
+            $"<Path Data='{DataFor(kind)}' Stroke='{{ThemeResource TextFillColorPrimaryBrush}}' StrokeThickness='1.5' " +
+            "StrokeStartLineCap='Round' StrokeEndLineCap='Round' StrokeLineJoin='Round'/></Canvas></Viewbox>");
+    }
 
     public static FrameworkElement Bolt(double size) => Make(BoltPath, size, stroke: null, fill: BoltColor);
 

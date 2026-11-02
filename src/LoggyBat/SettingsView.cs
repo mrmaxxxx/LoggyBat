@@ -1,6 +1,9 @@
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Shapes;
 using WidBar.SDK;
 
 namespace LoggyBat;
@@ -160,35 +163,94 @@ internal sealed class SettingsView
     // version, and its result (also an error) is always shown.
     private UIElement CheckNowRow()
     {
-        var result = Text(UpdateChecker.Shared.Last is { } last ? Describe(last) : "Ещё не проверялось");
+        var status = new StackPanel { Spacing = 2 };
         var button = new Button { Content = "Проверить сейчас", IsEnabled = _installed is not null };
+        bool checking = false;
+        string? failure = null;   // an unexpected exception of the last "Check now"
+
+        void Show()
+        {
+            status.Children.Clear();
+            if (_installed is not { } installed)
+            {
+                status.Children.Add(Text("Проверка недоступна: LoggyBat запущен не из пакета"));
+                return;
+            }
+
+            var (available, url, message) = UpdateCheck.SettingsStatus(
+                UpdateChecker.Shared.Last, UpdateChecker.Shared.Found, installed, checking);
+            if (available is not null)
+            {
+                // Same look as the update notice in the flyout: red dot, text, then the release link.
+                var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+                line.Children.Add(new Ellipse
+                {
+                    Width = 8,
+                    Height = 8,
+                    Fill = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 0xE8, 0x11, 0x23)),
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+                line.Children.Add(Text(available));
+                status.Children.Add(line);
+                if (url is not null)
+                {
+                    var link = new HyperlinkButton { Content = "Открыть страницу релиза", Padding = new Thickness(0) };
+                    link.Click += async (_, _) => await Windows.System.Launcher.LaunchUriAsync(new Uri(url));
+                    status.Children.Add(link);
+                }
+            }
+            if ((failure ?? message) is { } text)
+                status.Children.Add(Text(text));
+        }
+
         button.Click += async (_, _) =>
         {
             if (_installed is not { } installed)
                 return;
 
             button.IsEnabled = false;
-            result.Text = "Проверка…";
+            checking = true;
+            failure = null;
+            Show();
             try
             {
-                result.Text = Describe(await UpdateChecker.Shared.CheckNowAsync(installed, InstanceTag));
+                await UpdateChecker.Shared.CheckNowAsync(installed, InstanceTag);
             }
             catch (Exception e)
             {
-                result.Text = $"Не удалось проверить: {e.Message}";
+                failure = $"Не удалось проверить обновления: {e.Message}";
             }
+            checking = false;
             button.IsEnabled = true;
+            Show();
         };
 
         var row = new StackPanel { Spacing = 8 };
         row.Children.Add(button);
-        row.Children.Add(result);
+        row.Children.Add(status);
+
+        // Any finished check (this button or an automatic one) updates the open window in place;
+        // opening the settings again shows the saved result, including an update found earlier.
+        var ui = DispatcherQueue.GetForCurrentThread();
+        void OnChanged() => ui?.TryEnqueue(Show);
+        bool subscribed = false;
+        row.Loaded += (_, _) =>
+        {
+            if (!subscribed)
+            {
+                UpdateChecker.Shared.Changed += OnChanged;
+                subscribed = true;
+            }
+            Show();
+        };
+        row.Unloaded += (_, _) =>
+        {
+            UpdateChecker.Shared.Changed -= OnChanged;
+            subscribed = false;
+        };
+        Show();
         return row;
     }
-
-    private static string Describe(UpdateResult r) =>
-        $"{r.Text}. Проверено {r.At.ToLocalTime():dd.MM.yyyy HH:mm}." +
-        (r.Status == UpdateStatus.Available ? " Ссылка на релиз — в окне виджета." : "");
 
     private void FillDeviceRows()
     {

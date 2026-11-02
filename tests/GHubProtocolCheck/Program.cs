@@ -311,6 +311,18 @@ Check(reasons.Reason(later) == "запрещена: окно настроек о
 reasons.OnSettingsClosed(later);
 Check(reasons.Reason(later.AddSeconds(1)) == "запрещена: пауза 10 с после закрытия окна настроек" && reasons.Enabled, "log reason: settle pause; last received value kept");
 Check(DeviceList.ShortId("0123456789abcdef") == "01234567" && DeviceList.ShortId("ab") == "ab" && DeviceList.ShortId("") == "?", "instance id shortened for the log");
+// --- Result under "Проверить сейчас" in the settings ---
+var v1120 = new Version(1, 1, 20, 0);
+var found121 = UpdateCheck.Evaluate(Release("v1.1.21.0"), v1120, now);
+var none = UpdateCheck.Evaluate(Release("v1.1.20.0"), v1120, now);
+var failedCheck = new UpdateResult(UpdateStatus.Failed, null, null, "нет связи с GitHub", now);
+Check(UpdateCheck.SettingsStatus(null, null, v1120, checking: true) == (null, null, "Проверка обновлений…"), "settings: while checking");
+Check(UpdateCheck.SettingsStatus(found121, found121, v1120, false) == ("Доступна версия 1.1.21.0 (у вас 1.1.20.0)", found121.Url, null), "settings: update found -> text and release link");
+Check(UpdateCheck.SettingsStatus(none, null, v1120, false) == (null, null, "Обновлений нет (последний релиз 1.1.20.0)"), "settings: no updates, no link");
+Check(UpdateCheck.SettingsStatus(failedCheck, null, v1120, false) == (null, null, "Не удалось проверить обновления: нет связи с GitHub. Попробуйте позже."), "settings: clear error message, no link");
+Check(UpdateCheck.SettingsStatus(failedCheck, found121, v1120, false) is { Available: not null, Url: not null, Message: not null }, "settings: an update found earlier stays visible after a failed check, with the error");
+Check(UpdateCheck.SettingsStatus(found121, found121, new Version(1, 1, 21, 0), false) is { Available: null, Url: null }, "settings: after updating to the found version no link");
+Check(UpdateCheck.SettingsStatus(null, null, v1120, false) == (null, null, "Обновления ещё не проверялись"), "settings: never checked");
 Console.WriteLine("All checks passed.");
 
 // GitHub stand-in: answers queued in order; an unexpected request fails the test.

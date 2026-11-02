@@ -123,7 +123,7 @@ public sealed class MainPlugin :
 
         _previewRoot = new Grid { Background = null };
         _previewRoot.Children.Add(_preview);
-        // WidBar applies the Windows theme; the vector icons take their colour from it, so redraw.
+        // WidBar applies the Windows theme; redraw so everything picks up the new theme.
         _previewRoot.ActualThemeChanged += (_, _) => UpdatePreview();
 
         UpdatePreview();
@@ -177,11 +177,10 @@ public sealed class MainPlugin :
         if (_preview is null || _previewRoot is null)
             return;
 
-        var theme = _previewRoot.ActualTheme;
         _preview.Children.Clear();
         foreach (var (type, percent, charging) in DeviceList.PreviewItems(_ghub.Devices, _settings, DateTimeOffset.Now))
         {
-            var icon = Icons.Device(DeviceList.IconKind(type), 16, theme);
+            var icon = Icons.DeviceInTextColor(DeviceList.IconKind(type), 16);
             icon.Margin = new Thickness(_preview.Children.Count > 0 ? 14 : 0, 0, 5, 0);
             _preview.Children.Add(icon);
             _preview.Children.Add(new TextBlock
