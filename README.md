@@ -16,7 +16,7 @@ gets the battery levels from a running Logitech G HUB. You need **WidBar** and a
 
 - **Battery on the taskbar.** An icon and the charge of up to three Logitech devices that G HUB reports a
   battery level for; an orange bolt while a device is charging.
-- **Widget window «Шкалы».** Every device with its icon, name, charge and a turquoise bar.
+- **Widget window.** Every device with its icon, name, charge and a turquoise bar.
 - **Settings** (WidBar's gear): how many devices the taskbar shows, which ones and in what order.
 - **Update check.** A red dot and a link to the new release when one is out; **Check now** in the
   settings with its result right below it. The automatic check can be switched off. Nothing is
